@@ -32,9 +32,10 @@ class _PositionsScreenState extends State<PositionsScreen> {
     // Her 60 saniyede otomatik yenile
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       _loadPositions();
+      _loadRecentNotifications(); // Bildirimleri de güncelle
     });
     
-    // Gerçek zamanlı bildirimleri dinle
+    // Gerçek zamanlı bildirimleri dinle (SSE)
     _notificationSubscription = NotificationService.listenToNotifications().listen(
       (notification) {
         setState(() {
