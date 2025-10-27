@@ -198,6 +198,15 @@ setTimeout(() => {
 }, 5000);
 
 // API endpoint'leri
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'running',
+    service: 'TrumpTakip Bot',
+    timestamp: new Date().toISOString(),
+    positionsTracked: lastPositions.length
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
