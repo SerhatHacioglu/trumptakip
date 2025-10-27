@@ -7,23 +7,9 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Telegram Bot başlat
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+// Telegram Bot başlat (polling kapalı - sadece mesaj göndermek için)
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
-// Bot'a mesaj geldiğinde chat ID'yi göster
-bot.on('message', (msg) => {
-  console.log('\n📱 Telegram Mesajı Alındı!');
-  console.log(`👤 Chat ID: ${msg.chat.id}`);
-  console.log(`📝 Mesaj: ${msg.text}`);
-  console.log('\n💡 .env dosyanıza ekleyin: TELEGRAM_CHAT_ID=${msg.chat.id}\n');
-  
-  bot.sendMessage(msg.chat.id, 
-    `✅ Bağlantı başarılı!\n\n` +
-    `🆔 Chat ID'niz: ${msg.chat.id}\n\n` +
-    `📝 Bu ID'yi .env dosyasına ekleyin ve sunucuyu yeniden başlatın.`
-  );
-});
 
 // Telegram mesaj gönder
 async function sendTelegramMessage(text) {
