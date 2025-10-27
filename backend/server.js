@@ -154,25 +154,26 @@ async function compareAndNotify(currentPositions) {
     
     if (oldPos) {
       const sizeDiff = newPos.size - oldPos.size;
-      const sizeChangePercent = (Math.abs(sizeDiff) / oldPos.size) * 100;
       
-      // %5'ten fazla artış varsa
-      if (sizeDiff > 0 && sizeChangePercent > 5) {
+      // Herhangi bir artış varsa (minimum 0.0001 fark)
+      if (sizeDiff > 0.0001) {
+        const sizeChangePercent = (sizeDiff / oldPos.size) * 100;
         await sendTelegramMessage(
           `➕ <b>POZİSYONA EKLEME YAPILDI</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-          `📊 Eklenen: +${sizeDiff.toFixed(4)}\n` +
+          `📊 Eklenen: +${sizeDiff.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
           `📈 Yeni Toplam: ${newPos.size.toFixed(4)}\n` +
           `💵 Ortalama Giriş: $${newPos.entryPrice.toFixed(2)}`
         );
       }
       
-      // %5'ten fazla azalış varsa (kısmi kapatma)
-      if (sizeDiff < 0 && sizeChangePercent > 5) {
+      // Herhangi bir azalış varsa (kısmi kapatma, minimum 0.0001 fark)
+      if (sizeDiff < -0.0001) {
+        const sizeChangePercent = (Math.abs(sizeDiff) / oldPos.size) * 100;
         await sendTelegramMessage(
           `➖ <b>POZİSYON KISMİ KAPATILDI</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-          `📊 Kapatılan: ${sizeDiff.toFixed(4)}\n` +
+          `📊 Kapatılan: ${sizeDiff.toFixed(4)} (-${sizeChangePercent.toFixed(1)}%)\n` +
           `📉 Kalan: ${newPos.size.toFixed(4)}`
         );
       }
