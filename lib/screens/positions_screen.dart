@@ -1,10 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../services/hyperdash_service.dart';
 import '../services/notification_service.dart';
-import '../services/background_service.dart';
-import '../services/firebase_service.dart';
 
 class PositionsScreen extends StatefulWidget {
   const PositionsScreen({super.key});
@@ -20,11 +19,111 @@ class _PositionsScreenState extends State<PositionsScreen> {
   List<Position> _positions = [];
   bool _isLoading = false;
   String? _error;
+  Timer? _autoRefreshTimer;
+  StreamSubscription? _notificationSubscription;
+  List<Map<String, dynamic>> _recentNotifications = [];
 
   @override
   void initState() {
     super.initState();
     _loadPositions();
+    _loadRecentNotifications();
+    
+    // Her 60 saniyede otomatik yenile
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      _loadPositions();
+    });
+    
+    // Gerçek zamanlı bildirimleri dinle
+    _notificationSubscription = NotificationService.listenToNotifications().listen(
+      (notification) {
+        setState(() {
+          _recentNotifications.insert(0, notification);
+          if (_recentNotifications.length > 20) {
+            _recentNotifications.removeLast();
+          }
+        });
+        
+        // Snackbar göster
+        if (mounted) {
+          _showNotificationSnackbar(notification);
+        }
+        
+        // Pozisyonları güncelle
+        _loadPositions();
+      },
+    );
+  }
+  
+  Future<void> _loadRecentNotifications() async {
+    final notifications = await NotificationService.getRecentNotifications(limit: 10);
+    setState(() {
+      _recentNotifications = notifications;
+    });
+  }
+  
+  void _showNotificationSnackbar(Map<String, dynamic> notification) {
+    final message = notification['message'] as String;
+    final type = notification['type'] as String;
+    
+    // HTML taglerini temizle
+    final cleanMessage = message
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&amp;', '&')
+        .split('\n')
+        .first;
+    
+    Color backgroundColor;
+    IconData icon;
+    
+    switch (type) {
+      case 'new':
+        backgroundColor = Colors.green;
+        icon = Icons.add_circle;
+        break;
+      case 'closed':
+        backgroundColor = Colors.red;
+        icon = Icons.close;
+        break;
+      case 'added':
+        backgroundColor = Colors.blue;
+        icon = Icons.arrow_upward;
+        break;
+      case 'reduced':
+        backgroundColor = Colors.orange;
+        icon = Icons.arrow_downward;
+        break;
+      default:
+        backgroundColor = Colors.purple;
+        icon = Icons.notifications;
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                cleanMessage,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: backgroundColor,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    _notificationSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadPositions() async {
@@ -39,9 +138,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
         _positions = positions;
         _isLoading = false;
       });
-      
-      // Bildirim kontrolü yap
-      await NotificationService().checkAndNotify();
     } catch (e) {
       setState(() {
         _error = e.toString();
@@ -616,8 +712,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
   }
 
   void _showNotificationDialog() {
-    final fcmToken = FirebaseService().fcmToken;
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -642,11 +736,11 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.cloud_done, color: Colors.green.shade700),
+                    Icon(Icons.telegram, color: Colors.blue.shade700),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'Sunucu Taraflı Bildirimler Aktif!',
+                        'Telegram Bot Aktif!',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
@@ -691,69 +785,16 @@ class _PositionsScreenState extends State<PositionsScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      '• Uygulama kapalıyken bile bildirim gelir\n• Pil tüketmez (sunucu kontrolü)\n• Anlık bildirimler',
+                      '• Uygulama kapalıyken bile bildirim gelir\n• Pil tüketmez (sunucu kontrolü)\n• Telegram\'a anlık bildirimler',
                       style: TextStyle(fontSize: 11),
                     ),
                   ],
                 ),
               ),
-              if (fcmToken != null) ...[
-                const SizedBox(height: 16),
-                const Text(
-                  'FCM Token (Backend için):',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          fcmToken,
-                          style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 16),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: fcmToken));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Token kopyalandı')),
-                          );
-                        },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () async {
-              await BackgroundService.checkNow();
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Manuel kontrol başlatıldı...'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            child: const Text('Manuel Kontrol'),
-          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Tamam'),
