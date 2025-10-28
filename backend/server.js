@@ -129,7 +129,7 @@ function formatNumber(num) {
 }
 
 // Pozisyon değişim eşiği (USD cinsinden)
-const POSITION_CHANGE_THRESHOLD_USD = 150000; // $150,000
+const POSITION_CHANGE_THRESHOLD_USD = 1000000; // $1,000,000
 
 // Pozisyonları karşılaştır ve bildirim gönder
 async function compareAndNotify(currentPositions) {
