@@ -19,6 +19,9 @@ class Position {
     required this.liquidationPrice,
   });
 
+  // Position değerini hesapla (size * markPrice)
+  double get positionValue => size.abs() * markPrice;
+
   factory Position.fromJson(Map<String, dynamic> json) {
     return Position(
       coin: json['coin'] ?? '',

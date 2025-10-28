@@ -22,7 +22,8 @@ async function sendTelegramMessage(text) {
 }
 
 let lastPositions = [];
-let lastNotifiedPnL = {}; // Son bildirim gönderilen P&L değerlerini sakla: {coin_side: pnl}
+let lastNotifiedPrice = {}; // Son bildirim gönderilen fiyat değerlerini sakla: {coin_side: markPrice}
+let lastNotifiedSize = {}; // Son bildirim gönderilen pozisyon miktarlarını sakla: {coin_side: size}
 
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
@@ -103,8 +104,9 @@ async function checkPositions() {
           `⚡ Kaldıraç: ${pos.leverage.toFixed(1)}x`
         );
         
-        // Başlangıç P&L değerini kaydet
-        lastNotifiedPnL[positionKey] = pos.unrealizedPnl;
+        // Başlangıç fiyatını ve miktarını kaydet
+        lastNotifiedPrice[positionKey] = pos.markPrice;
+        lastNotifiedSize[positionKey] = pos.size;
       }
       
       return;
@@ -125,6 +127,9 @@ async function checkPositions() {
 function formatNumber(num) {
   return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
+
+// Pozisyon değişim eşiği (USD cinsinden)
+const POSITION_CHANGE_THRESHOLD_USD = 150000; // $150,000
 
 // Pozisyonları karşılaştır ve bildirim gönder
 async function compareAndNotify(currentPositions) {
@@ -174,82 +179,112 @@ async function compareAndNotify(currentPositions) {
     );
     
     if (oldPos) {
+      const positionKey = `${newPos.coin}_${newPos.side}`;
       const sizeDiff = newPos.size - oldPos.size;
       
-      // Herhangi bir artış varsa (minimum 0.0001 fark)
-      if (sizeDiff > 0.0001) {
-        const sizeChangePercent = (sizeDiff / oldPos.size) * 100;
+      // Son bildirim gönderilen miktarı al (yoksa eski pozisyon miktarını kullan)
+      const lastNotifiedSizeValue = lastNotifiedSize[positionKey] !== undefined 
+        ? lastNotifiedSize[positionKey] 
+        : oldPos.size;
+      
+      // Son bildirime göre değişimi hesapla
+      const sizeChangeFromLast = newPos.size - lastNotifiedSizeValue;
+      const sizeChangePercent = lastNotifiedSizeValue > 0 
+        ? Math.abs((sizeChangeFromLast / lastNotifiedSizeValue) * 100)
+        : 0;
+      
+      // Pozisyon değişiminin USD değerini hesapla
+      const sizeChangeValueUSD = Math.abs(sizeChangeFromLast * newPos.markPrice);
+      const positionValueUSD = newPos.size * newPos.markPrice;
+      
+      // ARTIŞ: Son bildirimden beri $150K+ artış varsa
+      if (sizeChangeFromLast > 0.0001 && sizeChangeValueUSD >= POSITION_CHANGE_THRESHOLD_USD) {
         await sendTelegramMessage(
           `➕ <b>POZİSYONA EKLEME YAPILDI</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-          `📊 Eklenen: +${sizeDiff.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
+          `📊 Eklenen: +${sizeChangeFromLast.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
+          `💵 Eklenen Değer: $${formatNumber(sizeChangeValueUSD)}\n` +
           `📈 Yeni Toplam: ${newPos.size.toFixed(4)}\n` +
+          `💎 Pozisyon Değeri: $${formatNumber(positionValueUSD)}\n` +
+          `📍 Son Bildirim: ${lastNotifiedSizeValue.toFixed(4)}\n` +
           `🎯 Ortalama Giriş: $${formatNumber(newPos.entryPrice)}\n` +
           `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}`
         );
+        
+        // Yeni miktarı kaydet
+        lastNotifiedSize[positionKey] = newPos.size;
       }
       
-      // Herhangi bir azalış varsa (kısmi kapatma, minimum 0.0001 fark)
-      if (sizeDiff < -0.0001) {
-        const sizeChangePercent = (Math.abs(sizeDiff) / oldPos.size) * 100;
+      // AZALIŞ: Son bildirimden beri $150K+ azalış varsa
+      if (sizeChangeFromLast < -0.0001 && sizeChangeValueUSD >= POSITION_CHANGE_THRESHOLD_USD) {
         await sendTelegramMessage(
           `➖ <b>POZİSYON KISMİ KAPATILDI</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-          `📊 Kapatılan: ${sizeDiff.toFixed(4)} (-${sizeChangePercent.toFixed(1)}%)\n` +
+          `📊 Kapatılan: ${sizeChangeFromLast.toFixed(4)} (-${sizeChangePercent.toFixed(1)}%)\n` +
+          `💵 Kapatılan Değer: $${formatNumber(sizeChangeValueUSD)}\n` +
           `📉 Kalan: ${newPos.size.toFixed(4)}\n` +
+          `💎 Kalan Değer: $${formatNumber(positionValueUSD)}\n` +
+          `📍 Son Bildirim: ${lastNotifiedSizeValue.toFixed(4)}\n` +
           `💵 Kapanış Fiyatı: $${formatNumber(newPos.markPrice)}`
         );
+        
+        // Yeni miktarı kaydet
+        lastNotifiedSize[positionKey] = newPos.size;
       }
       
-      // 4. P&L %10'dan fazla değişti mi? (Son gönderilen bildirime göre)
-      const positionKey = `${newPos.coin}_${newPos.side}`;
-      const lastNotifiedValue = lastNotifiedPnL[positionKey];
+      // İlk kez görüyorsak miktarı kaydet
+      if (lastNotifiedSize[positionKey] === undefined) {
+        lastNotifiedSize[positionKey] = newPos.size;
+      }
+      
+      // 4. Fiyat %2'den fazla değişti mi? (Son gönderilen bildirime göre)
+      // positionKey zaten yukarıda tanımlı
+      const lastNotifiedValue = lastNotifiedPrice[positionKey];
       
       // İlk kez kontrol ediyorsak veya daha önce bildirim gönderilmişse
-      if (lastNotifiedValue !== undefined) {
-        // Son bildirime göre değişimi hesapla
-        const pnlDiff = newPos.unrealizedPnl - lastNotifiedValue;
-        const pnlChange = Math.abs(lastNotifiedValue) > 0 
-          ? Math.abs((pnlDiff / Math.abs(lastNotifiedValue)) * 100)
-          : 0;
+      if (lastNotifiedValue !== undefined && lastNotifiedValue > 0) {
+        // Son bildirime göre fiyat değişimini hesapla
+        const priceDiff = newPos.markPrice - lastNotifiedValue;
+        const priceChangePercent = Math.abs((priceDiff / lastNotifiedValue) * 100);
         
-        // Mutlak P&L değeri $100'den büyükse ve %10'dan fazla değişim varsa
-        if (Math.abs(newPos.unrealizedPnl) > 100 && pnlChange > 10) {
+        // Fiyat %2'den fazla değişti mi?
+        if (priceChangePercent >= 2) {
           const isProfit = newPos.unrealizedPnl > 0;
-          const isIncrease = pnlDiff > 0;
+          const isPriceIncrease = priceDiff > 0;
           
-          // Başlık: Artış mı azalış mı?
-          const changeDirection = isIncrease ? '📈 ARTIŞ' : '📉 AZALIŞ';
+          // Başlık: Fiyat artışı mı azalışı mı?
+          const changeDirection = isPriceIncrease ? '📈 YUKARI' : '📉 AŞAĞI';
           const emoji = isProfit ? '💚' : '❤️';
           
           await sendTelegramMessage(
-            `${emoji} <b>ÖNEMLİ P&L DEĞİŞİMİ - ${changeDirection}</b>\n\n` +
+            `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}</b>\n\n` +
             `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-            `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}\n` +
-            `📊 Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(newPos.unrealizedPnl)}\n` +
-            `${isIncrease ? '⬆️' : '⬇️'} Değişim: ${isIncrease ? '+' : '-'}$${formatNumber(pnlDiff)} (${pnlChange.toFixed(1)}%)\n` +
-            `📍 Son Bildirim P&L: ${lastNotifiedValue >= 0 ? '+' : '-'}$${formatNumber(lastNotifiedValue)}\n` +
-            `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}`
+            `💵 Yeni Fiyat: $${formatNumber(newPos.markPrice)}\n` +
+            `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
+            `📍 Son Bildirim Fiyatı: $${formatNumber(lastNotifiedValue)}\n` +
+            `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}\n` +
+            `${emoji} Güncel P&L: ${isProfit ? '+' : ''}$${formatNumber(newPos.unrealizedPnl)}`
           );
           
-          // Yeni bildirimi kaydet
-          lastNotifiedPnL[positionKey] = newPos.unrealizedPnl;
+          // Yeni fiyatı kaydet
+          lastNotifiedPrice[positionKey] = newPos.markPrice;
         }
       } else {
         // İlk kez görüyoruz, kaydet
-        lastNotifiedPnL[positionKey] = newPos.unrealizedPnl;
+        lastNotifiedPrice[positionKey] = newPos.markPrice;
       }
     }
   }
   
-  // Kapanan pozisyonların P&L kayıtlarını temizle
-  for (const key in lastNotifiedPnL) {
+  // Kapanan pozisyonların fiyat ve miktar kayıtlarını temizle
+  for (const key in lastNotifiedPrice) {
     const [coin, side] = key.split('_');
     const exists = currentPositions.find(pos => 
       pos.coin === coin && pos.side === side
     );
     if (!exists) {
-      delete lastNotifiedPnL[key];
+      delete lastNotifiedPrice[key];
+      delete lastNotifiedSize[key];
     }
   }
 }

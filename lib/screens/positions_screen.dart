@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../services/hyperdash_service.dart';
 import '../services/coingecko_service.dart';
+import 'whale_tracker_screen.dart';
 
 class PositionsScreen extends StatefulWidget {
   const PositionsScreen({super.key});
@@ -135,6 +136,19 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
               ),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.waves,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const WhaleTrackerScreen()),
+              );
+            },
+            tooltip: 'Whale Tracker',
+          ),
           IconButton(
             icon: Icon(
               Icons.refresh_rounded,
