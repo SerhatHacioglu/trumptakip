@@ -22,6 +22,7 @@ async function sendTelegramMessage(text) {
 }
 
 let lastPositions = [];
+let lastNotifiedPnL = {}; // Son bildirim gönderilen P&L değerlerini sakla: {coin_side: pnl}
 
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
@@ -77,11 +78,35 @@ async function checkPositions() {
     // İlk çalıştırmada sadece kaydet
     if (lastPositions.length === 0) {
       lastPositions = currentPositions;
+      
+      // Bot başlatma mesajı
       await sendTelegramMessage(
         `🤖 <b>Bot Başlatıldı</b>\n\n` +
         `📊 Mevcut ${currentPositions.length} pozisyon izleniyor\n` +
         `💡 Değişiklikler bildirilecek`
       );
+      
+      // Tüm pozisyonların başlangıç durumunu bildir
+      for (const pos of currentPositions) {
+        const positionKey = `${pos.coin}_${pos.side}`;
+        const isProfit = pos.unrealizedPnl >= 0;
+        const emoji = isProfit ? '💚' : '❤️';
+        const sideEmoji = pos.side === 'LONG' ? '📈' : '📉';
+        
+        await sendTelegramMessage(
+          `${sideEmoji} <b>İZLENEN POZİSYON</b>\n\n` +
+          `💰 <b>${pos.coin}</b> ${pos.side}\n` +
+          `📊 Miktar: ${pos.size.toFixed(4)}\n` +
+          `🎯 Giriş: $${formatNumber(pos.entryPrice)}\n` +
+          `💵 Anlık Fiyat: $${formatNumber(pos.markPrice)}\n` +
+          `${emoji} Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(pos.unrealizedPnl)}\n` +
+          `⚡ Kaldıraç: ${pos.leverage.toFixed(1)}x`
+        );
+        
+        // Başlangıç P&L değerini kaydet
+        lastNotifiedPnL[positionKey] = pos.unrealizedPnl;
+      }
+      
       return;
     }
     
@@ -96,12 +121,13 @@ async function checkPositions() {
   }
 }
 
+// Rakamları 3'lü formatta göster
+function formatNumber(num) {
+  return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 // Pozisyonları karşılaştır ve bildirim gönder
 async function compareAndNotify(currentPositions) {
-  // Rakamları 3'lü formatta göster
-  const formatNumber = (num) => {
-    return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  };
   
   // 1. Yeni pozisyon açıldı mı?
   for (const newPos of currentPositions) {
@@ -175,12 +201,20 @@ async function compareAndNotify(currentPositions) {
         );
       }
       
-      // 4. P&L %10'dan fazla değişti mi?
-      if (Math.abs(oldPos.unrealizedPnl) > 100) {
-        const pnlDiff = newPos.unrealizedPnl - oldPos.unrealizedPnl;
-        const pnlChange = Math.abs((pnlDiff / Math.abs(oldPos.unrealizedPnl)) * 100);
+      // 4. P&L %10'dan fazla değişti mi? (Son gönderilen bildirime göre)
+      const positionKey = `${newPos.coin}_${newPos.side}`;
+      const lastNotifiedValue = lastNotifiedPnL[positionKey];
+      
+      // İlk kez kontrol ediyorsak veya daha önce bildirim gönderilmişse
+      if (lastNotifiedValue !== undefined) {
+        // Son bildirime göre değişimi hesapla
+        const pnlDiff = newPos.unrealizedPnl - lastNotifiedValue;
+        const pnlChange = Math.abs(lastNotifiedValue) > 0 
+          ? Math.abs((pnlDiff / Math.abs(lastNotifiedValue)) * 100)
+          : 0;
         
-        if (pnlChange > 10) {
+        // Mutlak P&L değeri $100'den büyükse ve %10'dan fazla değişim varsa
+        if (Math.abs(newPos.unrealizedPnl) > 100 && pnlChange > 10) {
           const isProfit = newPos.unrealizedPnl > 0;
           const isIncrease = pnlDiff > 0;
           
@@ -194,11 +228,28 @@ async function compareAndNotify(currentPositions) {
             `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}\n` +
             `📊 Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(newPos.unrealizedPnl)}\n` +
             `${isIncrease ? '⬆️' : '⬇️'} Değişim: ${isIncrease ? '+' : '-'}$${formatNumber(pnlDiff)} (${pnlChange.toFixed(1)}%)\n` +
-            `📍 Önceki P&L: ${oldPos.unrealizedPnl >= 0 ? '+' : '-'}$${formatNumber(oldPos.unrealizedPnl)}\n` +
+            `📍 Son Bildirim P&L: ${lastNotifiedValue >= 0 ? '+' : '-'}$${formatNumber(lastNotifiedValue)}\n` +
             `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}`
           );
+          
+          // Yeni bildirimi kaydet
+          lastNotifiedPnL[positionKey] = newPos.unrealizedPnl;
         }
+      } else {
+        // İlk kez görüyoruz, kaydet
+        lastNotifiedPnL[positionKey] = newPos.unrealizedPnl;
       }
+    }
+  }
+  
+  // Kapanan pozisyonların P&L kayıtlarını temizle
+  for (const key in lastNotifiedPnL) {
+    const [coin, side] = key.split('_');
+    const exists = currentPositions.find(pos => 
+      pos.coin === coin && pos.side === side
+    );
+    if (!exists) {
+      delete lastNotifiedPnL[key];
     }
   }
 }
