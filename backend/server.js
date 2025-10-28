@@ -127,6 +127,11 @@ async function checkPositions() {
 
 // Pozisyonları karşılaştır ve bildirim gönder
 async function compareAndNotify(currentPositions) {
+  // Rakamları 3'lü formatta göster
+  const formatNumber = (num) => {
+    return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+  
   // 1. Yeni pozisyon açıldı mı?
   for (const newPos of currentPositions) {
     const exists = lastPositions.find(old => 
@@ -139,7 +144,7 @@ async function compareAndNotify(currentPositions) {
         `${emoji} <b>YENİ POZİSYON AÇILDI</b>\n\n` +
         `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
         `📊 Miktar: ${newPos.size.toFixed(4)}\n` +
-        `💵 Giriş: $${newPos.entryPrice.toFixed(2)}\n` +
+        `💵 Giriş: $${formatNumber(newPos.entryPrice)}\n` +
         `⚡ Kaldıraç: ${newPos.leverage.toFixed(1)}x`
       );
     }
@@ -153,10 +158,11 @@ async function compareAndNotify(currentPositions) {
     
     if (!exists) {
       const pnlEmoji = oldPos.unrealizedPnl >= 0 ? '✅' : '❌';
+      const pnlSign = oldPos.unrealizedPnl >= 0 ? '+' : '-';
       await sendTelegramMessage(
         `🔚 <b>POZİSYON KAPATILDI</b>\n\n` +
         `💰 <b>${oldPos.coin}</b> ${oldPos.side}\n` +
-        `${pnlEmoji} P&L: $${oldPos.unrealizedPnl.toFixed(2)}`
+        `${pnlEmoji} P&L: ${pnlSign}$${formatNumber(oldPos.unrealizedPnl)}`
       );
     }
   }
@@ -178,7 +184,7 @@ async function compareAndNotify(currentPositions) {
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
           `📊 Eklenen: +${sizeDiff.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
           `📈 Yeni Toplam: ${newPos.size.toFixed(4)}\n` +
-          `💵 Ortalama Giriş: $${newPos.entryPrice.toFixed(2)}`
+          `💵 Ortalama Giriş: $${formatNumber(newPos.entryPrice)}`
         );
       }
       
@@ -195,17 +201,28 @@ async function compareAndNotify(currentPositions) {
       
       // 4. P&L %10'dan fazla değişti mi?
       if (Math.abs(oldPos.unrealizedPnl) > 100) {
-        const pnlChange = Math.abs((newPos.unrealizedPnl - oldPos.unrealizedPnl) / 
-                                    Math.abs(oldPos.unrealizedPnl) * 100);
+        const pnlDiff = newPos.unrealizedPnl - oldPos.unrealizedPnl;
+        const pnlChange = Math.abs((pnlDiff / Math.abs(oldPos.unrealizedPnl)) * 100);
         
         if (pnlChange > 10) {
           const isProfit = newPos.unrealizedPnl > 0;
+          const isIncrease = pnlDiff > 0;
+          
+          // Rakamları 3'lü formatta göster
+          const formatNumber = (num) => {
+            return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+          };
+          
+          // Başlık: Artış mı azalış mı?
+          const changeDirection = isIncrease ? '📈 ARTIŞ' : '📉 AZALIŞ';
           const emoji = isProfit ? '💚' : '❤️';
+          
           await sendTelegramMessage(
-            `${emoji} <b>ÖNEMLİ P&L DEĞİŞİMİ</b>\n\n` +
+            `${emoji} <b>ÖNEMLİ P&L DEĞİŞİMİ - ${changeDirection}</b>\n\n` +
             `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-            `📊 P&L: ${isProfit ? '+' : ''}$${newPos.unrealizedPnl.toFixed(2)}\n` +
-            `📈 Değişim: ${pnlChange.toFixed(1)}%`
+            `📊 Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(newPos.unrealizedPnl)}\n` +
+            `${isIncrease ? '⬆️' : '⬇️'} Değişim: ${isIncrease ? '+' : '-'}$${formatNumber(pnlDiff)} (${pnlChange.toFixed(1)}%)\n` +
+            `📍 Önceki P&L: ${oldPos.unrealizedPnl >= 0 ? '+' : '-'}$${formatNumber(oldPos.unrealizedPnl)}`
           );
         }
       }
