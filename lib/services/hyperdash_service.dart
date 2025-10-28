@@ -77,7 +77,6 @@ class HyperDashService {
         throw Exception('API isteği başarısız: ${response.statusCode}');
       }
     } catch (e) {
-      print('Pozisyonlar alınırken hata: $e');
       throw Exception('Pozisyonlar alınamadı: $e');
     }
   }
@@ -95,7 +94,6 @@ class HyperDashService {
       }
       return null;
     } catch (e) {
-      print('Trader istatistikleri alınırken hata: $e');
       return null;
     }
   }
@@ -119,7 +117,6 @@ class HyperDashService {
       }
       return 0.0;
     } catch (e) {
-      print('Fiyat alınırken hata: $e');
       return 0.0;
     }
   }

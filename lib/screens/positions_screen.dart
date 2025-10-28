@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../services/hyperdash_service.dart';
+import '../services/coingecko_service.dart';
 
 class PositionsScreen extends StatefulWidget {
   const PositionsScreen({super.key});
@@ -13,10 +14,13 @@ class PositionsScreen extends StatefulWidget {
 
 class _PositionsScreenState extends State<PositionsScreen> {
   final HyperDashService _service = HyperDashService();
+  final CoinGeckoService _coinGeckoService = CoinGeckoService();
   final String walletAddress = '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
   
   List<Position> _positions = [];
+  Map<String, CryptoPrice> _cryptoPrices = {};
   bool _isLoading = false;
+  bool _isPricesLoading = false;
   String? _error;
   Timer? _autoRefreshTimer;
 
@@ -24,10 +28,12 @@ class _PositionsScreenState extends State<PositionsScreen> {
   void initState() {
     super.initState();
     _loadPositions();
+    _loadCryptoPrices();
     
-    // Her 60 saniyede otomatik yenile
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+    // Her 30 saniyede otomatik yenile
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _loadPositions();
+      _loadCryptoPrices();
     });
   }
 
@@ -57,33 +63,77 @@ class _PositionsScreenState extends State<PositionsScreen> {
     }
   }
 
+  Future<void> _loadCryptoPrices() async {
+    setState(() {
+      _isPricesLoading = true;
+    });
+
+    try {
+      final prices = await _coinGeckoService.getCryptoPrices();
+      setState(() {
+        _cryptoPrices = prices;
+        _isPricesLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isPricesLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final btcPrice = _cryptoPrices['BTC'];
+    final btcChange = btcPrice?.change24h ?? 0;
+    final isBtcPositive = btcChange >= 0;
+    
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Açık Pozisyonlar',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
+        title: btcPrice != null
+            ? Row(
+                children: [
+                  Text(
+                    'BTC ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  Text(
+                    '\$${btcPrice.price.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    isBtcPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                    color: isBtcPositive ? Colors.green.shade400 : Colors.red.shade400,
+                    size: 18,
+                  ),
+                  Text(
+                    '${btcChange.abs().toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isBtcPositive ? Colors.green.shade400 : Colors.red.shade400,
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                'HyperLiquid',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-            ),
-            Text(
-              'HyperLiquid',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
         actions: [
           IconButton(
             icon: Icon(
@@ -100,33 +150,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(
-                strokeWidth: 5,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Pozisyonlar Yükleniyor...',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     if (_error != null) {
       return Center(
         child: Padding(
@@ -225,16 +248,119 @@ class _PositionsScreenState extends State<PositionsScreen> {
     }
 
     return RefreshIndicator(
-      onRefresh: _loadPositions,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: _positions.length + 1, // +1 for summary card
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return _buildSummaryCard();
-          }
-          return _buildPositionCard(_positions[index - 1]);
-        },
+      onRefresh: () async {
+        await _loadPositions();
+        await _loadCryptoPrices();
+      },
+      child: Stack(
+        children: [
+          ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: _positions.length + 2, // +2 for crypto prices and summary card
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return _buildCryptoPricesWidget();
+              }
+              if (index == 1) {
+                return _buildSummaryCard();
+              }
+              return _buildPositionCard(_positions[index - 2]);
+            },
+          ),
+          if (_isLoading)
+            Center(
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCryptoPricesWidget() {
+    if (_cryptoPrices.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // BTC'yi çıkar, sadece diğerlerini göster
+    final displayPrices = Map<String, CryptoPrice>.from(_cryptoPrices);
+    displayPrices.remove('BTC');
+
+    if (displayPrices.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: displayPrices.entries.map((entry) {
+          final crypto = entry.value;
+          final isPositive = crypto.change24h >= 0;
+          final changeColor = isPositive ? Colors.green.shade400 : Colors.red.shade400;
+
+          return Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  crypto.symbol,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '\$${crypto.symbol == 'BTC' || crypto.symbol == 'ETH' ? crypto.price.toStringAsFixed(0) : crypto.price.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                      color: changeColor,
+                      size: 16,
+                    ),
+                    Text(
+                      '${crypto.change24h.abs().toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: changeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -248,17 +374,17 @@ class _PositionsScreenState extends State<PositionsScreen> {
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
           width: 1,
         ),
       ),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(14),
         child: Column(
           children: [
             Row(
@@ -271,12 +397,12 @@ class _PositionsScreenState extends State<PositionsScreen> {
                       'Toplam',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -284,19 +410,19 @@ class _PositionsScreenState extends State<PositionsScreen> {
                           '${_positions.length}',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: 36,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                             height: 1,
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
                             'Pozisyon',
                             style: TextStyle(
                               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                              fontSize: 14,
+                              fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -307,12 +433,12 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+                    horizontal: 14,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
                     color: profitColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -322,13 +448,13 @@ class _PositionsScreenState extends State<PositionsScreen> {
                           Icon(
                             isProfit ? Icons.trending_up : Icons.trending_down,
                             color: profitColor,
-                            size: 20,
+                            size: 16,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Text(
                             'P&L',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: profitColor,
                               letterSpacing: 0.5,
@@ -336,11 +462,11 @@ class _PositionsScreenState extends State<PositionsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         '${isProfit ? '+' : ''}\$${_formatPrice(totalPnl)}',
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: profitColor,
                           height: 1,
@@ -363,17 +489,17 @@ class _PositionsScreenState extends State<PositionsScreen> {
     final sideColor = position.side == 'LONG' ? Colors.green.shade500 : Colors.red.shade500;
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: sideColor.withOpacity(0.2),
           width: 1.5,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -386,28 +512,28 @@ class _PositionsScreenState extends State<PositionsScreen> {
                     Text(
                       position.coin,
                       style: TextStyle(
-                        fontSize: 28,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.onSurface,
                         letterSpacing: -0.5,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                        horizontal: 8,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: sideColor,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         position.side,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                          fontSize: 10,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -416,17 +542,17 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
+                    horizontal: 10,
+                    vertical: 5,
                   ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     '${position.leverage.toStringAsFixed(1)}x',
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
@@ -434,14 +560,14 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
               
             // Pozisyon Detayları - Grid Layout
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
@@ -491,7 +617,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
                       ),
                       Expanded(
                         child: _buildDetailItem(
-                          'Likitasyon',
+                          'Likidasyon',
                           position.liquidationPrice > 0 
                             ? '\$${_formatPriceNoShorthand(position.liquidationPrice)}'
                             : 'N/A',
@@ -504,15 +630,15 @@ class _PositionsScreenState extends State<PositionsScreen> {
               ),
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             
             // PnL Kutusu
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: profitColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: profitColor.withOpacity(0.3),
                   width: 1.5,
@@ -524,22 +650,22 @@ class _PositionsScreenState extends State<PositionsScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(6),
+                        padding: const EdgeInsets.all(5),
                         decoration: BoxDecoration(
                           color: profitColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         child: Icon(
                           isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                           color: profitColor,
-                          size: 20,
+                          size: 16,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Text(
                         'P&L',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: profitColor,
                           letterSpacing: 0.5,
@@ -550,7 +676,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
                   Text(
                     '${isProfit ? '+' : ''}\$${_formatPrice(position.unrealizedPnl)}',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: profitColor,
                       letterSpacing: -0.5,
@@ -568,30 +694,30 @@ class _PositionsScreenState extends State<PositionsScreen> {
 
   Widget _buildDetailItem(String label, String value, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         children: [
           Icon(
             icon,
-            size: 22,
+            size: 18,
             color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               fontWeight: FontWeight.w500,
               letterSpacing: 0.3,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             value,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).colorScheme.onSurface,
               letterSpacing: -0.2,
