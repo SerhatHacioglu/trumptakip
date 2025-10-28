@@ -69,7 +69,7 @@ async function checkPositions() {
           markPrice: parseFloat(currentPrices[coin] || 0),
           unrealizedPnl: parseFloat(pos.unrealizedPnl || 0),
           positionValue: parseFloat(pos.positionValue || 0),
-          leverage: parseFloat(pos.leverage?.leverage || 1)
+          leverage: parseFloat(pos.leverage?.value || pos.leverage?.leverage || 1)
         });
       }
     }
@@ -101,7 +101,7 @@ async function checkPositions() {
           `🎯 Giriş: $${formatNumber(pos.entryPrice)}\n` +
           `💵 Anlık Fiyat: $${formatNumber(pos.markPrice)}\n` +
           `${emoji} Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(pos.unrealizedPnl)}\n` +
-          `⚡ Kaldıraç: ${pos.leverage.toFixed(1)}x`
+          `⚡ Kaldıraç: ${Math.round(pos.leverage)}x`
         );
         
         // Başlangıç fiyatını ve miktarını kaydet
@@ -129,7 +129,7 @@ function formatNumber(num) {
 }
 
 // Pozisyon değişim eşiği (USD cinsinden)
-const POSITION_CHANGE_THRESHOLD_USD = 1000000; // $1,000,000
+const POSITION_CHANGE_THRESHOLD_USD = 3000000; // $3,000,000
 
 // Pozisyonları karşılaştır ve bildirim gönder
 async function compareAndNotify(currentPositions) {
@@ -148,7 +148,7 @@ async function compareAndNotify(currentPositions) {
         `📊 Miktar: ${newPos.size.toFixed(4)}\n` +
         `🎯 Giriş: $${formatNumber(newPos.entryPrice)}\n` +
         `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}\n` +
-        `⚡ Kaldıraç: ${newPos.leverage.toFixed(1)}x`
+        `⚡ Kaldıraç: ${Math.round(newPos.leverage)}x`
       );
     }
   }
