@@ -16,41 +16,12 @@ async function sendTelegramMessage(text) {
   try {
     await bot.sendMessage(TELEGRAM_CHAT_ID, text, { parse_mode: 'HTML' });
     console.log('Telegram mesajı gönderildi');
-    
-    // Bildirimleri sakla
-    const notification = {
-      timestamp: new Date().toISOString(),
-      message: text,
-      type: text.includes('YENİ POZİSYON') ? 'new' : 
-            text.includes('KAPATILDI') ? 'closed' :
-            text.includes('EKLEME') ? 'added' :
-            text.includes('KISMİ') ? 'reduced' : 'pnl'
-    };
-    
-    lastNotifications.push(notification);
-    
-    // Son 50 bildirimi sakla
-    if (lastNotifications.length > 50) {
-      lastNotifications.shift();
-    }
-    
-    // SSE bağlantılarına gönder
-    if (global.notificationEmitter) {
-      global.notificationEmitter.forEach(handler => {
-        try {
-          handler(notification);
-        } catch (e) {
-          console.error('SSE gönderme hatası:', e);
-        }
-      });
-    }
   } catch (error) {
     console.error('Telegram mesaj gönderme hatası:', error.message);
   }
 }
 
 let lastPositions = [];
-let lastNotifications = [];
 
 const WALLET_ADDRESS = process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
@@ -285,46 +256,6 @@ app.post('/api/check-now', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
-
-// Son bildirimleri getir
-app.get('/api/notifications', (req, res) => {
-  const limit = parseInt(req.query.limit) || 20;
-  const recent = lastNotifications.slice(-limit).reverse();
-  res.json({
-    count: recent.length,
-    notifications: recent
-  });
-});
-
-// Server-Sent Events (SSE) için endpoint - gerçek zamanlı bildirimler
-app.get('/api/notifications/stream', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
-  // Her 30 saniyede keepalive gönder
-  const keepAliveInterval = setInterval(() => {
-    res.write(': keepalive\n\n');
-  }, 30000);
-  
-  // Yeni bildirim geldiğinde gönder
-  const notificationHandler = (notification) => {
-    res.write(`data: ${JSON.stringify(notification)}\n\n`);
-  };
-  
-  // Global event emitter (basit versiyonu - production'da daha robust olmalı)
-  global.notificationEmitter = global.notificationEmitter || [];
-  global.notificationEmitter.push(notificationHandler);
-  
-  // Bağlantı kapandığında temizle
-  req.on('close', () => {
-    clearInterval(keepAliveInterval);
-    const index = global.notificationEmitter.indexOf(notificationHandler);
-    if (index > -1) {
-      global.notificationEmitter.splice(index, 1);
-    }
-  });
 });
 
 const PORT = process.env.PORT || 3000;
