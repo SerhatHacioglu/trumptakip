@@ -144,7 +144,8 @@ async function compareAndNotify(currentPositions) {
         `${emoji} <b>YENİ POZİSYON AÇILDI</b>\n\n` +
         `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
         `📊 Miktar: ${newPos.size.toFixed(4)}\n` +
-        `💵 Giriş: $${formatNumber(newPos.entryPrice)}\n` +
+        `🎯 Giriş: $${formatNumber(newPos.entryPrice)}\n` +
+        `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}\n` +
         `⚡ Kaldıraç: ${newPos.leverage.toFixed(1)}x`
       );
     }
@@ -162,7 +163,9 @@ async function compareAndNotify(currentPositions) {
       await sendTelegramMessage(
         `🔚 <b>POZİSYON KAPATILDI</b>\n\n` +
         `💰 <b>${oldPos.coin}</b> ${oldPos.side}\n` +
-        `${pnlEmoji} P&L: ${pnlSign}$${formatNumber(oldPos.unrealizedPnl)}`
+        `${pnlEmoji} P&L: ${pnlSign}$${formatNumber(oldPos.unrealizedPnl)}\n` +
+        `🎯 Giriş: $${formatNumber(oldPos.entryPrice)}\n` +
+        `💵 Kapanış: $${formatNumber(oldPos.markPrice)}`
       );
     }
   }
@@ -184,7 +187,8 @@ async function compareAndNotify(currentPositions) {
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
           `📊 Eklenen: +${sizeDiff.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
           `📈 Yeni Toplam: ${newPos.size.toFixed(4)}\n` +
-          `💵 Ortalama Giriş: $${formatNumber(newPos.entryPrice)}`
+          `🎯 Ortalama Giriş: $${formatNumber(newPos.entryPrice)}\n` +
+          `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}`
         );
       }
       
@@ -195,7 +199,8 @@ async function compareAndNotify(currentPositions) {
           `➖ <b>POZİSYON KISMİ KAPATILDI</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
           `📊 Kapatılan: ${sizeDiff.toFixed(4)} (-${sizeChangePercent.toFixed(1)}%)\n` +
-          `📉 Kalan: ${newPos.size.toFixed(4)}`
+          `📉 Kalan: ${newPos.size.toFixed(4)}\n` +
+          `💵 Kapanış Fiyatı: $${formatNumber(newPos.markPrice)}`
         );
       }
       
@@ -208,11 +213,6 @@ async function compareAndNotify(currentPositions) {
           const isProfit = newPos.unrealizedPnl > 0;
           const isIncrease = pnlDiff > 0;
           
-          // Rakamları 3'lü formatta göster
-          const formatNumber = (num) => {
-            return Math.abs(num).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-          };
-          
           // Başlık: Artış mı azalış mı?
           const changeDirection = isIncrease ? '📈 ARTIŞ' : '📉 AZALIŞ';
           const emoji = isProfit ? '💚' : '❤️';
@@ -220,9 +220,11 @@ async function compareAndNotify(currentPositions) {
           await sendTelegramMessage(
             `${emoji} <b>ÖNEMLİ P&L DEĞİŞİMİ - ${changeDirection}</b>\n\n` +
             `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
+            `💵 Anlık Fiyat: $${formatNumber(newPos.markPrice)}\n` +
             `📊 Mevcut P&L: ${isProfit ? '+' : '-'}$${formatNumber(newPos.unrealizedPnl)}\n` +
             `${isIncrease ? '⬆️' : '⬇️'} Değişim: ${isIncrease ? '+' : '-'}$${formatNumber(pnlDiff)} (${pnlChange.toFixed(1)}%)\n` +
-            `📍 Önceki P&L: ${oldPos.unrealizedPnl >= 0 ? '+' : '-'}$${formatNumber(oldPos.unrealizedPnl)}`
+            `📍 Önceki P&L: ${oldPos.unrealizedPnl >= 0 ? '+' : '-'}$${formatNumber(oldPos.unrealizedPnl)}\n` +
+            `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}`
           );
         }
       }
