@@ -381,8 +381,10 @@ class _PositionsScreenState extends State<PositionsScreen> {
 
   Widget _buildSummaryCard() {
     double totalPnl = 0;
+    double totalValue = 0;
     for (var position in _positions) {
       totalPnl += position.unrealizedPnl;
+      totalValue += position.positionValue;
     }
     final isProfit = totalPnl >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
@@ -408,7 +410,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Toplam',
+                      'Toplam Pozisyon',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                         fontSize: 11,
@@ -429,15 +431,15 @@ class _PositionsScreenState extends State<PositionsScreen> {
                             height: 1,
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
                         Padding(
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
-                            'Pozisyon',
+                            '\$${_formatPrice(totalValue)}',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -500,162 +502,174 @@ class _PositionsScreenState extends State<PositionsScreen> {
   Widget _buildPositionCard(Position position) {
     final isProfit = position.unrealizedPnl >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
-    final sideColor = position.side == 'LONG' ? Colors.green.shade500 : Colors.red.shade500;
+    final isLong = position.side == 'LONG';
+    final isBig = position.positionValue > 1000000;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      elevation: 0,
+      elevation: isBig ? 2 : 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: sideColor.withOpacity(0.2),
-          width: 1.5,
-        ),
+        borderRadius: BorderRadius.circular(12),
+        side: isBig 
+            ? BorderSide(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                width: 2,
+              )
+            : BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                width: 1,
+              ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Coin başlığı ve badge
+            // Üst satır: Coin, Side Badge, Leverage
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      position.coin,
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: sideColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        position.side,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
+                Text(
+                  position.coin,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
+                    color: isLong ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    '${position.leverage.toStringAsFixed(1)}x',
+                    position.side,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      color: isLong ? Colors.green.shade600 : Colors.red.shade600,
                     ),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.flash_on,
+                        size: 12,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${position.leverage.round()}x',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
+            
             const SizedBox(height: 12),
-              
-            // Pozisyon Detayları - Grid Layout
+            
+            // Pozisyon detayları grid
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(12),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Column(
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDetailItem(
-                          'Miktar',
-                          position.size.toStringAsFixed(4),
-                          Icons.inventory_2_outlined,
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 50,
-                        color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-                      ),
-                      Expanded(
-                        child: _buildDetailItem(
-                          'Giriş',
-                          '\$${_formatPriceNoShorthand(position.entryPrice)}',
-                          Icons.login_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Divider(
-                      height: 1,
-                      color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                  Expanded(
+                    child: _buildCompactDetailItem(
+                      'Miktar',
+                      position.size.toStringAsFixed(4),
                     ),
                   ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDetailItem(
-                          'Mevcut',
-                          '\$${_formatPriceNoShorthand(position.markPrice)}',
-                          Icons.show_chart_rounded,
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 50,
-                        color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-                      ),
-                      Expanded(
-                        child: _buildDetailItem(
-                          'Likidasyon',
-                          position.liquidationPrice > 0 
-                            ? '\$${_formatPriceNoShorthand(position.liquidationPrice)}'
-                            : 'N/A',
-                          Icons.warning_amber_rounded,
-                        ),
-                      ),
-                    ],
+                  Container(
+                    width: 1,
+                    height: 35,
+                    color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                  ),
+                  Expanded(
+                    child: _buildCompactDetailItem(
+                      'Değer',
+                      '\$${_formatPrice(position.positionValue)}',
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 35,
+                    color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                  ),
+                  Expanded(
+                    child: _buildCompactDetailItem(
+                      'Giriş',
+                      '\$${_formatPriceNoShorthand(position.entryPrice)}',
+                    ),
                   ),
                 ],
               ),
             ),
             
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             
-            // PnL Kutusu
+            // Fiyat bilgileri
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildCompactDetailItem(
+                      'Mevcut Fiyat',
+                      '\$${_formatPriceNoShorthand(position.markPrice)}',
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 35,
+                    color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                  ),
+                  Expanded(
+                    child: _buildCompactDetailItem(
+                      'Liq. Fiyat',
+                      position.liquidationPrice > 0 
+                          ? '\$${_formatPriceNoShorthand(position.liquidationPrice)}'
+                          : 'N/A',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // P&L kutusu
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: profitColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: profitColor.withOpacity(0.3),
-                  width: 1.5,
+                  width: 1,
                 ),
               ),
               child: Row(
@@ -663,26 +677,18 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: profitColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          isProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                          color: profitColor,
-                          size: 16,
-                        ),
+                      Icon(
+                        isProfit ? Icons.trending_up : Icons.trending_down,
+                        size: 16,
+                        color: profitColor,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 6),
                       Text(
-                        'P&L',
+                        'Gerçekleşmemiş P&L',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: profitColor,
-                          letterSpacing: 0.5,
                         ),
                       ),
                     ],
@@ -690,11 +696,9 @@ class _PositionsScreenState extends State<PositionsScreen> {
                   Text(
                     '${isProfit ? '+' : ''}\$${_formatPrice(position.unrealizedPnl)}',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: profitColor,
-                      letterSpacing: -0.5,
-                      height: 1,
                     ),
                   ),
                 ],
@@ -706,50 +710,41 @@ class _PositionsScreenState extends State<PositionsScreen> {
     );
   }
 
-  Widget _buildDetailItem(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            size: 18,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+  Widget _buildCompactDetailItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.3,
-            ),
-            textAlign: TextAlign.center,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-              letterSpacing: -0.2,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 
   String _formatPrice(double price) {
-    if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(2)}M';
-    } else if (price >= 1000) {
-      return '${(price / 1000).toStringAsFixed(2)}K';
+    final absPrice = price.abs();
+    if (absPrice >= 1000000) {
+      return '${(absPrice / 1000000).toStringAsFixed(2)}M';
+    } else if (absPrice >= 1000) {
+      return '${(absPrice / 1000).toStringAsFixed(2)}K';
     } else {
-      return price.toStringAsFixed(2);
+      return absPrice.toStringAsFixed(2);
     }
   }
 
