@@ -2,19 +2,19 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ExchangeRateService {
-  static const String _apiUrl = 'https://api.exchangerate-api.com/v4/latest/USD';
+  static const String _binanceApi = 'https://api.binance.com/api/v3/ticker/price?symbol=USDTTRY';
 
-  Future<double> getUsdTryRate() async {
+  Future<double> getUsdtTryRate() async {
     try {
-      final response = await http.get(Uri.parse(_apiUrl));
+      final response = await http.get(Uri.parse(_binanceApi));
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return (data['rates']['TRY'] as num).toDouble();
+        return double.parse(data['price']);
       }
       return 34.5; // Fallback rate
     } catch (e) {
-      print('Exchange rate error: $e');
+      print('USDT/TRY rate error: $e');
       return 34.5; // Fallback rate
     }
   }

@@ -16,10 +16,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   final CoinGeckoService _coinGeckoService = CoinGeckoService();
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
   
-  final double _initialInvestmentTRY = 600000;
-  
   Map<String, double> _cryptoPrices = {};
-  double _usdTryRate = 34.5;
+  double _usdtTryRate = 34.5;
   Timer? _autoRefreshTimer;
   late AnimationController _animationController;
 
@@ -48,11 +46,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   Future<void> _loadData() async {
     try {
       final prices = await _coinGeckoService.getCryptoPrices();
-      final usdTry = await _exchangeRateService.getUsdTryRate();
+      final usdtTry = await _exchangeRateService.getUsdtTryRate();
       
       setState(() {
         _cryptoPrices = prices.map((key, value) => MapEntry(key, value.price));
-        _usdTryRate = usdTry;
+        _usdtTryRate = usdtTry;
       });
       
       _animationController.forward(from: 0);
@@ -62,22 +60,23 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   }
 
   double _getCurrentValueTRY() {
-    double totalUSD = 0;
+    double total = 0;
     final assets = PortfolioAsset.getAssets();
     
     for (var asset in assets) {
-      totalUSD += asset.getCurrentValue(_cryptoPrices);
+      total += asset.getCurrentValue(_cryptoPrices, _usdtTryRate);
     }
     
-    return totalUSD * _usdTryRate;
+    return total;
   }
 
   @override
   Widget build(BuildContext context) {
     final currentValueTRY = _getCurrentValueTRY();
-    final profitLossTRY = currentValueTRY - _initialInvestmentTRY;
-    final profitLossPercent = _initialInvestmentTRY > 0 
-        ? (profitLossTRY / _initialInvestmentTRY) * 100.0
+    final initialInvestment = PortfolioAsset.getTotalInvested();
+    final profitLossTRY = currentValueTRY - initialInvestment;
+    final profitLossPercent = initialInvestment > 0 
+        ? (profitLossTRY / initialInvestment) * 100.0
         : 0.0;
     final isProfit = profitLossTRY >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
@@ -127,6 +126,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                     currentValueTRY,
                     profitLossTRY,
                     profitLossPercent,
+                    initialInvestment,
                     isProfit,
                     profitColor,
                   ),
@@ -155,6 +155,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
     double currentValue,
     double profitLoss,
     double profitPercent,
+    double invested,
     bool isProfit,
     Color profitColor,
   ) {
@@ -235,7 +236,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
               Expanded(
                 child: _buildStatItem(
                   'Yatırım',
-                  '₺${_formatNumber(_initialInvestmentTRY)}',
+                  '₺${_formatNumber(invested)}',
                   Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
@@ -321,7 +322,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'USD/TRY Kuru',
+                'USDT/TRY Kuru',
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
@@ -329,7 +330,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
               ),
               const SizedBox(height: 4),
               Text(
-                '₺${_usdTryRate.toStringAsFixed(2)}',
+                '₺${_usdtTryRate.toStringAsFixed(2)}',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -390,7 +391,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                       painter: _PieChartPainter(
                         assets: assets,
                         prices: _cryptoPrices,
-                        tryRate: _usdTryRate,
+                        usdtTryRate: _usdtTryRate,
                         animation: _animationController,
                       ),
                     ),
@@ -428,7 +429,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
             runSpacing: 8,
             children: assets.map((asset) {
               final percentage = total > 0 
-                  ? (asset.getCurrentValue(_cryptoPrices) * _usdTryRate / total * 100)
+                  ? (asset.getCurrentValue(_cryptoPrices, _usdtTryRate) / total * 100)
                   : 0;
               final color = _getColorForAsset(assets.indexOf(asset));
               
@@ -462,8 +463,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
 
   Widget _buildAssetCard(PortfolioAsset asset) {
     final price = _cryptoPrices[asset.symbol] ?? 0;
-    final valueUSD = asset.getCurrentValue(_cryptoPrices);
-    final valueTRY = valueUSD * _usdTryRate;
+    final valueTRY = asset.getCurrentValue(_cryptoPrices, _usdtTryRate);
+    final profitLoss = asset.getProfitLoss(_cryptoPrices, _usdtTryRate);
+    final profitPercent = asset.getProfitLossPercent(_cryptoPrices, _usdtTryRate);
+    final isProfit = profitLoss >= 0;
+    final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
     final color = _getColorForAsset(PortfolioAsset.getAssets().indexOf(asset));
 
     return Card(
@@ -541,12 +545,22 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                         color: color,
                       ),
                     ),
-                    Text(
-                      '\$${valueUSD.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
+                    Row(
+                      children: [
+                        Icon(
+                          isProfit ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                          color: profitColor,
+                          size: 16,
+                        ),
+                        Text(
+                          '${isProfit ? '+' : ''}${profitPercent.toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: profitColor,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -578,6 +592,64 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                     child: _buildAssetDetailItem(
                       'Fiyat',
                       '\$${price.toStringAsFixed(2)}',
+                    ),
+                  ),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                  ),
+                  Expanded(
+                    child: _buildAssetDetailItem(
+                      'Yatırım',
+                      '₺${_formatNumberShort(asset.investedTRY)}',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Kar/Zarar Göstergesi
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: profitColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: profitColor.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        isProfit ? Icons.trending_up : Icons.trending_down,
+                        size: 16,
+                        color: profitColor,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Kar/Zarar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: profitColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '${isProfit ? '+' : ''}₺${_formatNumber(profitLoss.abs())}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: profitColor,
                     ),
                   ),
                 ],
@@ -624,34 +696,50 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   }
 
   String _formatNumber(double number) {
-    if (number.abs() >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(2)}M';
-    } else if (number.abs() >= 1000) {
-      return '${(number / 1000).toStringAsFixed(2)}K';
+    final abs = number.abs();
+    final parts = abs.toStringAsFixed(2).split('.');
+    final intPart = parts[0];
+    final decPart = parts[1];
+    
+    // 3'lü gruplara ayır
+    String formatted = '';
+    for (int i = intPart.length - 1; i >= 0; i--) {
+      formatted = intPart[i] + formatted;
+      if ((intPart.length - i) % 3 == 0 && i != 0) {
+        formatted = '.$formatted';
+      }
     }
-    return number.toStringAsFixed(2);
+    
+    return '$formatted,$decPart';
   }
 
   String _formatNumberShort(double number) {
-    if (number.abs() >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number.abs() >= 1000) {
-      return '${(number / 1000).toStringAsFixed(0)}K';
+    final abs = number.abs().round();
+    final str = abs.toString();
+    
+    // 3'lü gruplara ayır
+    String formatted = '';
+    for (int i = str.length - 1; i >= 0; i--) {
+      formatted = str[i] + formatted;
+      if ((str.length - i) % 3 == 0 && i != 0) {
+        formatted = '.$formatted';
+      }
     }
-    return number.toStringAsFixed(0);
+    
+    return formatted;
   }
 }
 
 class _PieChartPainter extends CustomPainter {
   final List<PortfolioAsset> assets;
   final Map<String, double> prices;
-  final double tryRate;
+  final double usdtTryRate;
   final Animation<double> animation;
 
   _PieChartPainter({
     required this.assets,
     required this.prices,
-    required this.tryRate,
+    required this.usdtTryRate,
     required this.animation,
   }) : super(repaint: animation);
 
@@ -662,7 +750,7 @@ class _PieChartPainter extends CustomPainter {
     
     double total = 0;
     for (var asset in assets) {
-      total += asset.getCurrentValue(prices) * tryRate;
+      total += asset.getCurrentValue(prices, usdtTryRate);
     }
     
     if (total == 0) return;
@@ -671,7 +759,7 @@ class _PieChartPainter extends CustomPainter {
     
     for (int i = 0; i < assets.length; i++) {
       final asset = assets[i];
-      final value = asset.getCurrentValue(prices) * tryRate;
+      final value = asset.getCurrentValue(prices, usdtTryRate);
       final sweepAngle = (value / total) * 2 * math.pi * animation.value;
       
       final paint = Paint()
