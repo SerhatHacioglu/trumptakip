@@ -1,16 +1,22 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 class PortfolioAsset {
   final String symbol;
-  final double amount;
   final String name;
   final String emoji;
+  final double amount;
   final double investedTRY;
+  final String coingeckoId;
 
   PortfolioAsset({
     required this.symbol,
-    required this.amount,
     required this.name,
     required this.emoji,
+    required this.amount,
     required this.investedTRY,
+    required this.coingeckoId,
   });
 
   static List<PortfolioAsset> getAssets() {
@@ -21,6 +27,7 @@ class PortfolioAsset {
         name: 'Avalanche',
         emoji: '🔺',
         investedTRY: 162000,
+        coingeckoId: 'avalanche-2',
       ),
       PortfolioAsset(
         symbol: 'SOL',
@@ -28,6 +35,7 @@ class PortfolioAsset {
         name: 'Solana',
         emoji: '☀️',
         investedTRY: 159000,
+        coingeckoId: 'solana',
       ),
       PortfolioAsset(
         symbol: 'ETH',
@@ -35,6 +43,7 @@ class PortfolioAsset {
         name: 'Ethereum',
         emoji: '💎',
         investedTRY: 155000,
+        coingeckoId: 'ethereum',
       ),
       PortfolioAsset(
         symbol: 'SUI',
@@ -42,6 +51,7 @@ class PortfolioAsset {
         name: 'Sui',
         emoji: '🌊',
         investedTRY: 24000,
+        coingeckoId: 'sui',
       ),
       PortfolioAsset(
         symbol: 'XRP',
@@ -49,8 +59,28 @@ class PortfolioAsset {
         name: 'Ripple',
         emoji: '💧',
         investedTRY: 100000,
+        coingeckoId: 'ripple',
       ),
     ];
+  }
+
+  static Future<List<PortfolioAsset>> getAssetsWithSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final defaultAssets = getAssets();
+    
+    return defaultAssets.map((asset) {
+      final savedAmount = prefs.getDouble('amount_${asset.symbol}') ?? asset.amount;
+      final savedInvested = prefs.getDouble('invested_${asset.symbol}') ?? asset.investedTRY;
+      
+      return PortfolioAsset(
+        symbol: asset.symbol,
+        name: asset.name,
+        emoji: asset.emoji,
+        amount: savedAmount,
+        investedTRY: savedInvested,
+        coingeckoId: asset.coingeckoId,
+      );
+    }).toList();
   }
 
   static double getTotalInvested() {

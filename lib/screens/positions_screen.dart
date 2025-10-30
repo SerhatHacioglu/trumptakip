@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../services/hyperdash_service.dart';
 import '../services/coingecko_service.dart';
-import 'whale_tracker_screen.dart';
 import 'portfolio_screen.dart';
 
 class PositionsScreen extends StatefulWidget {
@@ -152,19 +151,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
           ),
           IconButton(
             icon: Icon(
-              Icons.waves,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const WhaleTrackerScreen()),
-              );
-            },
-            tooltip: 'Whale Tracker',
-          ),
-          IconButton(
-            icon: Icon(
               Icons.refresh_rounded,
               color: Theme.of(context).colorScheme.onSurface,
             ),
@@ -237,39 +223,77 @@ class _PositionsScreenState extends State<PositionsScreen> {
     }
 
     if (_positions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      return RefreshIndicator(
+        onRefresh: () async {
+          await _loadPositions();
+          await _loadCryptoPrices();
+        },
+        child: Stack(
           children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.inbox_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-              ),
+            ListView(
+              padding: const EdgeInsets.all(8),
+              children: [
+                _buildCryptoPricesWidget(),
+                const SizedBox(height: 16),
+                // Sadece yükleme bittiyse ve pozisyon yoksa mesaj göster
+                if (!_isLoading)
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 40),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.inbox_outlined,
+                            size: 64,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Açık Pozisyon Bulunamadı',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Bu wallet için açık pozisyon bulunmuyor.',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Açık Pozisyon Bulunamadı',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
+            if (_isLoading)
+              Center(
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Bu wallet için açık pozisyon bulunmuyor.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                fontSize: 14,
-              ),
-            ),
           ],
         ),
       );
@@ -320,7 +344,45 @@ class _PositionsScreenState extends State<PositionsScreen> {
 
   Widget _buildCryptoPricesWidget() {
     if (_cryptoPrices.isEmpty) {
-      return const SizedBox.shrink();
+      return Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: _isPricesLoading
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Fiyatlar yükleniyor...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  'Fiyatlar yüklenemedi',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+        ),
+      );
     }
 
     // BTC'yi çıkar, sadece diğerlerini göster

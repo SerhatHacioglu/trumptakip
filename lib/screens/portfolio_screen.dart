@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/portfolio_asset.dart';
 import '../services/coingecko_service.dart';
 import '../services/exchange_rate_service.dart';
+import './portfolio_settings_screen.dart';
 
 class PortfolioScreen extends StatefulWidget {
   const PortfolioScreen({super.key});
@@ -20,6 +21,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   double _usdtTryRate = 34.5;
   Timer? _autoRefreshTimer;
   late AnimationController _animationController;
+  List<PortfolioAsset> _assets = [];
 
   @override
   void initState() {
@@ -47,10 +49,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
     try {
       final prices = await _coinGeckoService.getCryptoPrices();
       final usdtTry = await _exchangeRateService.getUsdtTryRate();
+      final assets = await PortfolioAsset.getAssetsWithSettings();
       
       setState(() {
         _cryptoPrices = prices.map((key, value) => MapEntry(key, value.price));
         _usdtTryRate = usdtTry;
+        _assets = assets;
       });
       
       _animationController.forward(from: 0);
@@ -61,19 +65,22 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
 
   double _getCurrentValueTRY() {
     double total = 0;
-    final assets = PortfolioAsset.getAssets();
     
-    for (var asset in assets) {
+    for (var asset in _assets) {
       total += asset.getCurrentValue(_cryptoPrices, _usdtTryRate);
     }
     
     return total;
   }
 
+  double _getTotalInvested() {
+    return _assets.fold(0.0, (sum, asset) => sum + asset.investedTRY);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentValueTRY = _getCurrentValueTRY();
-    final initialInvestment = PortfolioAsset.getTotalInvested();
+    final initialInvestment = _getTotalInvested();
     final profitLossTRY = currentValueTRY - initialInvestment;
     final profitLossPercent = initialInvestment > 0 
         ? (profitLossTRY / initialInvestment) * 100.0
@@ -104,6 +111,26 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.settings,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PortfolioSettingsScreen(),
+                ),
+              );
+              
+              // Ayarlar sayfasından dönünce veriyi yenile
+              if (result == true) {
+                _loadData();
+              }
+            },
+            tooltip: 'Ayarlar',
+          ),
           IconButton(
             icon: Icon(
               Icons.refresh_rounded,
@@ -144,7 +171,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                   const SizedBox(height: 16),
                   
                   // Asset Listesi
-                  ...PortfolioAsset.getAssets().map((asset) => _buildAssetCard(asset)),
+                  ..._assets.map((asset) => _buildAssetCard(asset)),
                 ],
               ),
       ),
@@ -345,7 +372,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   }
 
   Widget _buildAssetDistribution() {
-    final assets = PortfolioAsset.getAssets();
     final total = _getCurrentValueTRY();
     
     return Container(
@@ -389,7 +415,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                     height: 150,
                     child: CustomPaint(
                       painter: _PieChartPainter(
-                        assets: assets,
+                        assets: _assets,
                         prices: _cryptoPrices,
                         usdtTryRate: _usdtTryRate,
                         animation: _animationController,
@@ -427,11 +453,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
           Wrap(
             spacing: 12,
             runSpacing: 8,
-            children: assets.map((asset) {
+            children: _assets.map((asset) {
               final percentage = total > 0 
                   ? (asset.getCurrentValue(_cryptoPrices, _usdtTryRate) / total * 100)
                   : 0;
-              final color = _getColorForAsset(assets.indexOf(asset));
+              final color = _getColorForAsset(_assets.indexOf(asset));
               
               return Row(
                 mainAxisSize: MainAxisSize.min,
