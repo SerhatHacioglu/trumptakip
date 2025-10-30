@@ -1,23 +1,11 @@
 import 'dart:async';
-import 'dart:math' as math;
-import 'package:f      print('Fetching stock prices for: $stockSymbols');
-      
-      // Sadece Finnhub kullan (Yahoo kaldırıldı)
-      Map<String, double> stockPricesMap = {};
-      if (stockSymbols.isNotEmpty) {
-        print('Fetching from Finnhub...');
-        
-        final finnhubResult = await _finnhubService.getStockPrices(stockSymbols);
-        stockPricesMap = finnhubResult;
-      }
-      
-      print('Final stock prices: $stockPricesMap');ial.dart';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/multi_portfolio.dart';
 import '../services/coingecko_service.dart';
 import '../services/exchange_rate_service.dart';
-import '../services/yahoo_finance_service.dart';
 import '../services/finnhub_service.dart';
-import '../services/alpha_vantage_service.dart';
+import 'multi_portfolio_settings_screen.dart';
 
 class MultiPortfolioScreen extends StatefulWidget {
   const MultiPortfolioScreen({super.key});
@@ -29,13 +17,13 @@ class MultiPortfolioScreen extends StatefulWidget {
 class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   final CoinGeckoService _coinGeckoService = CoinGeckoService();
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
-  final YahooFinanceService _yahooFinanceService = YahooFinanceService();
   final FinnhubService _finnhubService = FinnhubService();
-  final AlphaVantageService _alphaVantageService = AlphaVantageService();
   
   Map<String, double> _cryptoPrices = {};
   Map<String, double> _stockPrices = {};
   double _usdtTryRate = 34.5;
+  double _usdTryRate = 34.3;
+  double _targetAmount = 2000000;
   Timer? _autoRefreshTimer;
   List<PortfolioGroup> _portfolios = [];
   bool _isLoading = true;
@@ -43,11 +31,18 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   @override
   void initState() {
     super.initState();
+    _loadTarget();
     _loadData();
     
-    // Her 30 saniyede otomatik yenile
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _loadData();
+    });
+  }
+
+  Future<void> _loadTarget() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _targetAmount = prefs.getDouble('portfolio_target') ?? 2000000;
     });
   }
 
@@ -66,8 +61,8 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       final portfolios = await PortfolioItem.getPortfoliosWithSettings();
       final prices = await _coinGeckoService.getCryptoPrices();
       final usdtTry = await _exchangeRateService.getUsdtTryRate();
+      final usdTry = await _exchangeRateService.getUsdTryRate();
       
-      // Hisse senedi sembollerini topla
       final stockSymbols = portfolios
           .expand((p) => p.items)
           .where((item) => item.type == AssetType.stock)
@@ -77,22 +72,21 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       
       print('Fetching stock prices for: $stockSymbols');
       
-      // Sadece Finnhub kullan (Yahoo kaldırıldı)
       Map<String, double> stockPricesMap = {};
       if (stockSymbols.isNotEmpty) {
-        print('� Fetching from Finnhub...');
-        
+        print('Fetching from Finnhub...');
         final finnhubResult = await _finnhubService.getStockPrices(stockSymbols);
         stockPricesMap = finnhubResult;
       }
       
-      print('✅ Final stock prices: $stockPricesMap');
+      print('Final stock prices: $stockPricesMap');
       
       setState(() {
         _portfolios = portfolios;
         _cryptoPrices = prices.map((key, value) => MapEntry(key, value.price));
         _stockPrices = stockPricesMap;
         _usdtTryRate = usdtTry;
+        _usdTryRate = usdTry;
         _isLoading = false;
       });
     } catch (e) {
@@ -105,8 +99,55 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
 
   double _getTotalValue() {
     return _portfolios.fold(0.0, (sum, portfolio) {
-      return sum + portfolio.getTotalValueTRY(_cryptoPrices, _stockPrices, _usdtTryRate);
+      return sum + portfolio.getTotalValueTRY(_cryptoPrices, _stockPrices, _usdtTryRate, _usdTryRate);
     });
+  }
+
+  Future<void> _editTarget() async {
+    String targetText = _targetAmount.toStringAsFixed(0);
+    
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) {
+        final controller = TextEditingController(text: targetText);
+        return AlertDialog(
+          title: const Text('Hedef Düzenle'),
+          content: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Hedef (TL)',
+              hintText: '2000000',
+              suffixText: '₺',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) => targetText = value,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('İptal'),
+            ),
+            TextButton(
+              onPressed: () {
+                final value = double.tryParse(targetText) ?? 2000000;
+                Navigator.of(context).pop(value);
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('portfolio_target', result);
+      setState(() {
+        _targetAmount = result;
+      });
+    }
   }
 
   @override
@@ -118,29 +159,34 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: Row(
+        title: const Row(
           children: [
-            Text(
-              '📁',
-              style: TextStyle(fontSize: 20),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Çoklu Portföy',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
+            Text('📁', style: TextStyle(fontSize: 20)),
+            SizedBox(width: 8),
+            Text('Çoklu Portföy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.refresh_rounded,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+            icon: const Icon(Icons.flag),
+            onPressed: _editTarget,
+            tooltip: 'Hedef Düzenle',
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MultiPortfolioSettingsScreen()),
+              );
+              if (result == true) {
+                _loadData();
+              }
+            },
+            tooltip: 'Ayarlar',
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
             onPressed: _loadData,
             tooltip: 'Yenile',
           ),
@@ -149,37 +195,14 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: _isLoading
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Veriler yükleniyor...',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              )
+            ? const Center(child: CircularProgressIndicator())
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Toplam Değer Kartı
                   _buildTotalValueCard(totalValue),
-                  
                   const SizedBox(height: 8),
-                  
-                  // USDT/TRY Kuru
                   _buildExchangeRateCard(),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Portföy Kartları
                   ..._portfolios.map((portfolio) => _buildPortfolioCard(portfolio)),
                 ],
               ),
@@ -188,6 +211,12 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   }
 
   Widget _buildTotalValueCard(double totalValue) {
+    final difference = totalValue - _targetAmount;
+    final percentage = (_targetAmount > 0) ? (totalValue / _targetAmount * 100) : 0;
+    final requiredGrowth = (totalValue > 0) ? (((_targetAmount - totalValue) / totalValue) * 100) : 0;
+    final isAboveTarget = totalValue >= _targetAmount;
+    final profitColor = isAboveTarget ? Colors.green.shade400 : Colors.deepPurple.shade400;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -195,18 +224,15 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.primary.withOpacity(0.7),
+            profitColor.withOpacity(0.15),
+            profitColor.withOpacity(0.05),
           ],
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(
+          color: profitColor.withOpacity(0.3),
+          width: 2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,44 +240,145 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: profitColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  Icons.account_balance_wallet,
-                  color: Colors.white,
+                  isAboveTarget ? Icons.check_circle : Icons.flag,
+                  color: profitColor,
                   size: 24,
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                'Toplam Portföy Değeri',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Toplam Portföy Değeri',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₺${_formatNumber(totalValue)}',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                        height: 1,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
+          
           const SizedBox(height: 16),
-          Text(
-            '₺${_formatNumber(totalValue)}',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-            ),
+          
+          Divider(color: profitColor.withOpacity(0.2)),
+          
+          const SizedBox(height: 16),
+          
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hedef',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₺${_formatNumber(_targetAmount)}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: profitColor.withOpacity(0.2),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fark',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${difference >= 0 ? '+' : ''}₺${_formatNumber(difference.abs())}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: profitColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 40,
+                color: profitColor.withOpacity(0.2),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isAboveTarget ? 'Durum' : 'Gerekli',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isAboveTarget 
+                          ? '✓ Aşıldı'
+                          : '+${requiredGrowth.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: profitColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
+          
+          const SizedBox(height: 12),
+          
           Text(
             '${_portfolios.length} Portföy',
             style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 13,
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
             ),
           ),
         ],
@@ -268,36 +395,22 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.currency_exchange,
-            size: 18,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          Icon(Icons.currency_exchange, size: 18, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 8),
-          Text(
-            'USDT/TRY:',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
+          const Text('USDT/TRY:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(width: 6),
-          Text(
-            '₺${_usdtTryRate.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
+          Text('₺${_usdtTryRate.toStringAsFixed(2)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+          const SizedBox(width: 16),
+          const Text('USD/TRY:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 6),
+          Text('₺${_usdTryRate.toStringAsFixed(2)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
         ],
       ),
     );
   }
 
   Widget _buildPortfolioCard(PortfolioGroup portfolio) {
-    final totalValue = portfolio.getTotalValueTRY(_cryptoPrices, _stockPrices, _usdtTryRate);
+    final totalValue = portfolio.getTotalValueTRY(_cryptoPrices, _stockPrices, _usdtTryRate, _usdTryRate);
     final color = _getColorForPortfolio(portfolio.id);
     
     return Card(
@@ -305,99 +418,23 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: color.withOpacity(0.3),
-          width: 2,
-        ),
+        side: BorderSide(color: color.withOpacity(0.3), width: 2),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color.withOpacity(0.1),
-              color.withOpacity(0.05),
-            ],
-          ),
-        ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        portfolio.emoji,
-                        style: TextStyle(fontSize: 24),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          portfolio.name,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${portfolio.items.length} Varlık',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '₺${_formatNumberShort(totalValue)}',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            Row(
+              children: [
+                Text(portfolio.emoji, style: const TextStyle(fontSize: 24)),
+                const SizedBox(width: 12),
+                Expanded(child: Text(portfolio.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                Text('₺${_formatNumberShort(totalValue)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+              ],
             ),
-            
-            // Asset List
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: portfolio.items.map((item) => _buildAssetRow(item, color)).toList(),
-              ),
-            ),
+            const SizedBox(height: 16),
+            ...portfolio.items.map((item) => _buildAssetRow(item, color)),
           ],
         ),
       ),
@@ -405,143 +442,33 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   }
 
   Widget _buildAssetRow(PortfolioItem item, Color accentColor) {
-    final price = item.type == AssetType.crypto 
+    final isCash = item.type == AssetType.cash;
+    final price = !isCash && item.type == AssetType.crypto 
         ? _cryptoPrices[item.symbol] ?? 0 
-        : _stockPrices[item.symbol] ?? 0;
-    final value = item.getCurrentValue(_cryptoPrices, _stockPrices, _usdtTryRate);
-    final isPriceAvailable = price > 0;
+        : !isCash ? _stockPrices[item.symbol] ?? 0 : 0;
+    final value = item.getCurrentValue(_cryptoPrices, _stockPrices, _usdtTryRate, _usdTryRate);
+    final isPriceAvailable = !isCash && price > 0;
     
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isPriceAvailable 
-              ? accentColor.withOpacity(0.2)
-              : Colors.orange.withOpacity(0.3),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: isPriceAvailable
-                  ? accentColor.withOpacity(0.1)
-                  : Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: isPriceAvailable
-                  ? Text(
-                      item.emoji,
-                      style: TextStyle(fontSize: 18),
-                    )
-                  : Icon(
-                      Icons.warning_amber,
-                      size: 18,
-                      color: Colors.orange.shade600,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 12),
+          Text(item.emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      item.symbol,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: item.type == AssetType.crypto 
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.purple.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        item.type == AssetType.crypto ? 'Crypto' : 'Stock',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: item.type == AssetType.crypto 
-                              ? Colors.blue.shade600
-                              : Colors.purple.shade600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${item.amount} ${item.symbol}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                ),
+                Text(item.symbol, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(isCash ? item.name : '${item.amount} ${item.symbol}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              isPriceAvailable
-                  ? Text(
-                      '₺${_formatNumberShort(value)}',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    )
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 14,
-                          color: Colors.orange.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Fiyat Yok',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-              const SizedBox(height: 4),
-              isPriceAvailable
-                  ? Text(
-                      '\$${price.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                    )
-                  : Text(
-                      'API Hatası',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.orange.shade600,
-                      ),
-                    ),
+              Text(isCash || isPriceAvailable ? '₺${_formatNumberShort(value)}' : 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
+              if (isPriceAvailable) Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
             ],
           ),
         ],
@@ -551,24 +478,20 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
 
   Color _getColorForPortfolio(String id) {
     switch (id) {
-      case 'portfolio_1':
-        return Colors.blue.shade400;
-      case 'portfolio_2':
-        return Colors.purple.shade400;
-      case 'portfolio_3':
-        return Colors.orange.shade400;
-      default:
-        return Colors.teal.shade400;
+      case 'portfolio_1': return Colors.blue.shade400;
+      case 'portfolio_2': return Colors.purple.shade400;
+      case 'portfolio_3': return Colors.orange.shade400;
+      case 'portfolio_4': return Colors.green.shade400;
+      case 'portfolio_5': return Colors.red.shade400;
+      default: return Colors.teal.shade400;
     }
   }
 
   String _formatNumber(double number) {
     if (number == 0) return '0,00';
-    
     final parts = number.toStringAsFixed(2).split('.');
     String intPart = parts[0];
     final decPart = parts[1];
-    
     String formatted = '';
     for (int i = intPart.length - 1; i >= 0; i--) {
       formatted = intPart[i] + formatted;
@@ -576,13 +499,11 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
         formatted = '.$formatted';
       }
     }
-    
     return '$formatted,$decPart';
   }
 
   String _formatNumberShort(double number) {
     if (number == 0) return '0';
-    
     if (number >= 1000000) {
       return '${(number / 1000000).toStringAsFixed(2)}M';
     } else if (number >= 1000) {

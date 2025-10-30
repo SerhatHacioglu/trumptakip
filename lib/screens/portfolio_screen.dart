@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/portfolio_asset.dart';
 import '../services/coingecko_service.dart';
 import '../services/exchange_rate_service.dart';
@@ -22,6 +23,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   Timer? _autoRefreshTimer;
   late AnimationController _animationController;
   List<PortfolioAsset> _assets = [];
+  double _targetAmount = 600000.0; // Hedef 600K
 
   @override
   void initState() {
@@ -85,6 +87,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
     final profitLossPercent = initialInvestment > 0 
         ? (profitLossTRY / initialInvestment) * 100.0
         : 0.0;
+    final requiredGrowth = (currentValueTRY > 0) ? (((_targetAmount - currentValueTRY) / currentValueTRY) * 100).toDouble() : 0.0;
+    final isAboveTarget = currentValueTRY >= _targetAmount;
     final isProfit = profitLossTRY >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
 
@@ -152,9 +156,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                   _buildSummaryCard(
                     currentValueTRY,
                     profitLossTRY,
-                    profitLossPercent,
+                    requiredGrowth,
                     initialInvestment,
-                    isProfit,
+                    isAboveTarget,
                     profitColor,
                   ),
                   
@@ -181,9 +185,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   Widget _buildSummaryCard(
     double currentValue,
     double profitLoss,
-    double profitPercent,
+    double requiredGrowth,
     double invested,
-    bool isProfit,
+    bool isAboveTarget,
     Color profitColor,
   ) {
     return Container(
@@ -215,7 +219,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isProfit ? Icons.trending_up : Icons.trending_down,
+                  isAboveTarget ? Icons.check_circle : Icons.flag,
                   color: profitColor,
                   size: 24,
                 ),
@@ -275,7 +279,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
               Expanded(
                 child: _buildStatItem(
                   'Kar/Zarar',
-                  '${isProfit ? '+' : ''}₺${_formatNumber(profitLoss)}',
+                  '${profitLoss >= 0 ? '+' : ''}₺${_formatNumber(profitLoss)}',
                   profitColor,
                 ),
               ),
@@ -286,8 +290,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
               ),
               Expanded(
                 child: _buildStatItem(
-                  'Getiri',
-                  '${isProfit ? '+' : ''}${profitPercent.toStringAsFixed(2)}%',
+                  isAboveTarget ? 'Durum' : 'Gerekli',
+                  isAboveTarget 
+                      ? '✓ Aşıldı'
+                      : '+${requiredGrowth.toStringAsFixed(1)}%',
                   profitColor,
                 ),
               ),

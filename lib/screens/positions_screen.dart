@@ -5,6 +5,7 @@ import '../models/position.dart';
 import '../services/hyperdash_service.dart';
 import '../services/coingecko_service.dart';
 import 'portfolio_screen.dart';
+import 'multi_portfolio_screen.dart';
 
 class PositionsScreen extends StatefulWidget {
   const PositionsScreen({super.key});
@@ -136,6 +137,19 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
               ),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.folder_open,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MultiPortfolioScreen()),
+              );
+            },
+            tooltip: 'Çoklu Portföy',
+          ),
           IconButton(
             icon: Icon(
               Icons.account_balance_wallet,

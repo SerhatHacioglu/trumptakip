@@ -15,14 +15,17 @@ class PortfolioGroup {
     required this.items,
   });
 
-  double getTotalValueTRY(Map<String, double> cryptoPrices, Map<String, double> stockPrices, double usdtTryRate) {
+  double getTotalValueTRY(Map<String, double> cryptoPrices, Map<String, double> stockPrices, double usdtTryRate, double usdTryRate) {
     return items.fold(0.0, (sum, item) {
       if (item.type == AssetType.crypto) {
         final price = cryptoPrices[item.symbol] ?? 0;
         return sum + (item.amount * price * usdtTryRate);
-      } else {
+      } else if (item.type == AssetType.stock) {
         final price = stockPrices[item.symbol] ?? 0;
-        return sum + (item.amount * price * usdtTryRate);
+        return sum + (item.amount * price * usdTryRate);
+      } else {
+        // Cash - amount already in TRY
+        return sum + item.amount;
       }
     });
   }
@@ -31,6 +34,7 @@ class PortfolioGroup {
 enum AssetType {
   crypto,
   stock,
+  cash,
 }
 
 class PortfolioItem {
@@ -50,13 +54,16 @@ class PortfolioItem {
     this.coingeckoId,
   });
 
-  double getCurrentValue(Map<String, double> cryptoPrices, Map<String, double> stockPrices, double usdtTryRate) {
+  double getCurrentValue(Map<String, double> cryptoPrices, Map<String, double> stockPrices, double usdtTryRate, double usdTryRate) {
     if (type == AssetType.crypto) {
       final price = cryptoPrices[symbol] ?? 0;
       return amount * price * usdtTryRate;
-    } else {
+    } else if (type == AssetType.stock) {
       final price = stockPrices[symbol] ?? 0;
-      return amount * price * usdtTryRate;
+      return amount * price * usdTryRate;
+    } else {
+      // Cash - amount already in TRY
+      return amount;
     }
   }
 
@@ -134,6 +141,67 @@ class PortfolioItem {
             emoji: '📈',
             amount: 41.8698,
             type: AssetType.stock,
+          ),
+        ],
+      ),
+      PortfolioGroup(
+        id: 'portfolio_4',
+        name: 'Kişisel Portföy',
+        emoji: '💰',
+        items: [
+          PortfolioItem(
+            symbol: 'AVAX',
+            name: 'Avalanche',
+            emoji: '🔺',
+            amount: 138.38,
+            type: AssetType.crypto,
+            coingeckoId: 'avalanche-2',
+          ),
+          PortfolioItem(
+            symbol: 'SOL',
+            name: 'Solana',
+            emoji: '☀️',
+            amount: 17.2576,
+            type: AssetType.crypto,
+            coingeckoId: 'solana',
+          ),
+          PortfolioItem(
+            symbol: 'ETH',
+            name: 'Ethereum',
+            emoji: '💎',
+            amount: 0.8397,
+            type: AssetType.crypto,
+            coingeckoId: 'ethereum',
+          ),
+          PortfolioItem(
+            symbol: 'SUI',
+            name: 'Sui',
+            emoji: '🌊',
+            amount: 170.3824,
+            type: AssetType.crypto,
+            coingeckoId: 'sui',
+          ),
+          PortfolioItem(
+            symbol: 'XRP',
+            name: 'Ripple',
+            emoji: '💧',
+            amount: 972.9,
+            type: AssetType.crypto,
+            coingeckoId: 'ripple',
+          ),
+        ],
+      ),
+      PortfolioGroup(
+        id: 'portfolio_5',
+        name: 'Nakit Bakiye',
+        emoji: '💵',
+        items: [
+          PortfolioItem(
+            symbol: 'TRY',
+            name: 'Türk Lirası',
+            emoji: '🇹🇷',
+            amount: 640000,
+            type: AssetType.cash,
           ),
         ],
       ),
