@@ -24,7 +24,6 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   double _usdtTryRate = 34.5;
   double _usdTryRate = 34.3;
   double _targetAmount = 2000000;
-  Timer? _autoRefreshTimer;
   List<PortfolioGroup> _portfolios = [];
   bool _isLoading = true;
 
@@ -33,10 +32,6 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
     super.initState();
     _loadTarget();
     _loadData();
-    
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _loadData();
-    });
   }
 
   Future<void> _loadTarget() async {
@@ -48,7 +43,6 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -70,16 +64,11 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
           .toSet()
           .toList();
       
-      print('Fetching stock prices for: $stockSymbols');
-      
       Map<String, double> stockPricesMap = {};
       if (stockSymbols.isNotEmpty) {
-        print('Fetching from Finnhub...');
         final finnhubResult = await _finnhubService.getStockPrices(stockSymbols);
         stockPricesMap = finnhubResult;
       }
-      
-      print('Final stock prices: $stockPricesMap');
       
       setState(() {
         _portfolios = portfolios;
@@ -93,7 +82,6 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       setState(() {
         _isLoading = false;
       });
-      print('Error loading data: $e');
     }
   }
 
@@ -161,7 +149,7 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
         surfaceTintColor: Colors.transparent,
         title: const Row(
           children: [
-            Text('📁', style: TextStyle(fontSize: 20)),
+            Text('�', style: TextStyle(fontSize: 20)),
             SizedBox(width: 8),
             Text('Çoklu Portföy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ],

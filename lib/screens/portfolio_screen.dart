@@ -20,7 +20,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   
   Map<String, double> _cryptoPrices = {};
   double _usdtTryRate = 34.5;
-  Timer? _autoRefreshTimer;
   late AnimationController _animationController;
   List<PortfolioAsset> _assets = [];
   double _targetAmount = 600000.0; // Hedef 600K
@@ -33,16 +32,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
       vsync: this,
     );
     _loadData();
-    
-    // Her 30 saniyede otomatik yenile
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _loadData();
-    });
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }

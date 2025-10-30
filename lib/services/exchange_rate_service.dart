@@ -15,7 +15,6 @@ class ExchangeRateService {
       }
       return 34.5; // Fallback rate
     } catch (e) {
-      print('USDT/TRY rate error: $e');
       return 34.5; // Fallback rate
     }
   }
@@ -31,7 +30,6 @@ class ExchangeRateService {
       }
       return 34.3; // Fallback rate
     } catch (e) {
-      print('USD/TRY rate error: $e');
       return 34.3; // Fallback rate
     }
   }
