@@ -148,7 +148,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 MaterialPageRoute(builder: (context) => const MultiPortfolioScreen()),
               );
             },
-            tooltip: 'Çoklu Portföy',
+            tooltip: 'Trader Takip',
           ),
           IconButton(
             icon: Icon(

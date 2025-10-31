@@ -22,7 +22,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   double _usdtTryRate = 34.5;
   late AnimationController _animationController;
   List<PortfolioAsset> _assets = [];
-  double _targetAmount = 600000.0; // Hedef 600K
 
   @override
   void initState() {
@@ -76,12 +75,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     final currentValueTRY = _getCurrentValueTRY();
     final initialInvestment = _getTotalInvested();
+    final targetAmount = initialInvestment; // Hedef = Toplam yatırım
     final profitLossTRY = currentValueTRY - initialInvestment;
     final profitLossPercent = initialInvestment > 0 
         ? (profitLossTRY / initialInvestment) * 100.0
         : 0.0;
-    final requiredGrowth = (currentValueTRY > 0) ? (((_targetAmount - currentValueTRY) / currentValueTRY) * 100).toDouble() : 0.0;
-    final isAboveTarget = currentValueTRY >= _targetAmount;
+    final requiredGrowth = (currentValueTRY > 0) ? (((targetAmount - currentValueTRY) / currentValueTRY) * 100).toDouble() : 0.0;
+    final isAboveTarget = currentValueTRY >= targetAmount;
     final isProfit = profitLossTRY >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
 

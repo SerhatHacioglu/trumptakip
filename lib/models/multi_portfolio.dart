@@ -125,7 +125,7 @@ class PortfolioItem {
       ),
       PortfolioGroup(
         id: 'portfolio_3',
-        name: 'Portföy 3 (US Stocks)',
+        name: 'Portföy 3',
         emoji: '🇺🇸',
         items: [
           PortfolioItem(
@@ -139,14 +139,14 @@ class PortfolioItem {
             symbol: 'TQQQ',
             name: 'ProShares UltraPro QQQ',
             emoji: '📈',
-            amount: 41.8698,
+            amount: 59.3827,
             type: AssetType.stock,
           ),
         ],
       ),
       PortfolioGroup(
         id: 'portfolio_4',
-        name: 'Kişisel Portföy',
+        name: 'Portföy 4',
         emoji: '💰',
         items: [
           PortfolioItem(
@@ -169,7 +169,7 @@ class PortfolioItem {
             symbol: 'ETH',
             name: 'Ethereum',
             emoji: '💎',
-            amount: 0.8397,
+            amount: 1.0000,
             type: AssetType.crypto,
             coingeckoId: 'ethereum',
           ),
@@ -177,7 +177,7 @@ class PortfolioItem {
             symbol: 'SUI',
             name: 'Sui',
             emoji: '🌊',
-            amount: 170.3824,
+            amount: 412.6824,
             type: AssetType.crypto,
             coingeckoId: 'sui',
           ),
@@ -200,7 +200,7 @@ class PortfolioItem {
             symbol: 'TRY',
             name: 'Türk Lirası',
             emoji: '🇹🇷',
-            amount: 640000,
+            amount: 500000,
             type: AssetType.cash,
           ),
         ],

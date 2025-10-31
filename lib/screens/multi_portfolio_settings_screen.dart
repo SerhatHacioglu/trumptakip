@@ -262,7 +262,7 @@ class _MultiPortfolioSettingsScreenState extends State<MultiPortfolioSettingsScr
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               labelText: isCash ? 'Bakiye (TL)' : 'Miktar',
-              hintText: isCash ? '640000' : '0.0',
+              hintText: isCash ? '500000' : '0.0',
               border: const OutlineInputBorder(),
               suffixText: isCash ? 'TL' : item.symbol,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

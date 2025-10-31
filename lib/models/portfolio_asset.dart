@@ -39,18 +39,18 @@ class PortfolioAsset {
       ),
       PortfolioAsset(
         symbol: 'ETH',
-        amount: 0.8397,
+        amount: 1.0000,
         name: 'Ethereum',
         emoji: '💎',
-        investedTRY: 155000,
+        investedTRY: 182000,
         coingeckoId: 'ethereum',
       ),
       PortfolioAsset(
         symbol: 'SUI',
-        amount: 170.3824,
+        amount: 412.6824,
         name: 'Sui',
         emoji: '🌊',
-        investedTRY: 24000,
+        investedTRY: 47000,
         coingeckoId: 'sui',
       ),
       PortfolioAsset(

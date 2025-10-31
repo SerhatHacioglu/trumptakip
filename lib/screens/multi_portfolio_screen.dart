@@ -149,9 +149,9 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
         surfaceTintColor: Colors.transparent,
         title: const Row(
           children: [
-            Text('�', style: TextStyle(fontSize: 20)),
+            Text('📊', style: TextStyle(fontSize: 20)),
             SizedBox(width: 8),
-            Text('Çoklu Portföy', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text('Trader Takip', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ],
         ),
         actions: [
