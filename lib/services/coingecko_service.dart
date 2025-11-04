@@ -4,59 +4,67 @@ import 'package:http/http.dart' as http;
 class CoinGeckoService {
   static const String _baseUrl = 'https://api.coingecko.com/api/v3';
 
-  Future<Map<String, CryptoPrice>> getCryptoPrices() async {
+  Future<Map<String, CryptoPrice>> getCryptoPrices({List<String>? cryptoIds}) async {
     try {
-      final ids = 'bitcoin,ethereum,solana,avalanche-2,ripple,sui';
-      final response = await http.get(
-        Uri.parse('$_baseUrl/simple/price?ids=$ids&vs_currencies=usd&include_24hr_change=true'),
-      );
-
+      // Use provided IDs or default to main screen coins
+      final ids = cryptoIds?.isNotEmpty == true 
+          ? cryptoIds!.join(',')
+          : 'bitcoin,ethereum,solana,avalanche-2,sui,ripple';
+      
+      final url = Uri.parse('$_baseUrl/simple/price?ids=$ids&vs_currencies=usd');
+      
+      final response = await http.get(url);
+      
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final Map<String, dynamic> data = json.decode(response.body);
         
-        return {
-          'BTC': CryptoPrice(
-            symbol: 'BTC',
-            name: 'Bitcoin',
-            price: data['bitcoin']['usd'].toDouble(),
-            change24h: data['bitcoin']['usd_24h_change']?.toDouble() ?? 0,
-          ),
-          'ETH': CryptoPrice(
-            symbol: 'ETH',
-            name: 'Ethereum',
-            price: data['ethereum']['usd'].toDouble(),
-            change24h: data['ethereum']['usd_24h_change']?.toDouble() ?? 0,
-          ),
-          'SOL': CryptoPrice(
-            symbol: 'SOL',
-            name: 'Solana',
-            price: data['solana']['usd'].toDouble(),
-            change24h: data['solana']['usd_24h_change']?.toDouble() ?? 0,
-          ),
-          'AVAX': CryptoPrice(
-            symbol: 'AVAX',
-            name: 'Avalanche',
-            price: data['avalanche-2']['usd'].toDouble(),
-            change24h: data['avalanche-2']['usd_24h_change']?.toDouble() ?? 0,
-          ),
-          'XRP': CryptoPrice(
-            symbol: 'XRP',
-            name: 'Ripple',
-            price: data['ripple']['usd'].toDouble(),
-            change24h: data['ripple']['usd_24h_change']?.toDouble() ?? 0,
-          ),
-          'SUI': CryptoPrice(
-            symbol: 'SUI',
-            name: 'Sui',
-            price: data['sui']['usd'].toDouble(),
-            change24h: data['sui']['usd_24h_change']?.toDouble() ?? 0,
-          ),
+        final Map<String, CryptoPrice> prices = {};
+        
+        // Map of CoinGecko IDs to symbols
+        final idToSymbol = {
+          'bitcoin': 'BTC',
+          'ethereum': 'ETH',
+          'ripple': 'XRP',
+          'cardano': 'ADA',
+          'solana': 'SOL',
+          'dogecoin': 'DOGE',
+          'binancecoin': 'BNB',
+          'polkadot': 'DOT',
+          'litecoin': 'LTC',
+          'chainlink': 'LINK',
+          'uniswap': 'UNI',
+          'avalanche-2': 'AVAX',
+          'cosmos': 'ATOM',
+          'stellar': 'XLM',
+          'polygon': 'MATIC',
+          'tron': 'TRX',
+          'algorand': 'ALGO',
+          'vechain': 'VET',
+          'filecoin': 'FIL',
+          'apecoin': 'APE',
+          'sui': 'SUI',
+          'hyperliquid': 'HYPE',
         };
-      } else {
-        throw Exception('Failed to load crypto prices');
+        
+        // Iterate over the response and build the prices map
+        data.forEach((coinId, priceData) {
+          final symbol = idToSymbol[coinId] ?? coinId.toUpperCase();
+          if (priceData['usd'] != null) {
+            prices[symbol] = CryptoPrice(
+              symbol: symbol,
+              name: coinId, // Using coinId as name for now
+              price: priceData['usd'].toDouble(),
+              change24h: 0.0, // CoinGecko simple price doesn't include change
+            );
+          }
+        });
+        
+        return prices;
       }
+      
+      return {};
     } catch (e) {
-      rethrow;
+      return {};
     }
   }
 }

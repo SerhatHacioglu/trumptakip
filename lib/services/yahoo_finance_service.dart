@@ -25,16 +25,12 @@ class YahooFinanceService {
     try {
       for (var symbol in symbols) {
         try {
-          print('Fetching price for $symbol from Yahoo Finance...');
-          
           final response = await http.get(
             Uri.parse('$_baseUrl$symbol?interval=1d&range=1d'),
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
           ).timeout(const Duration(seconds: 10));
-
-          print('Response status for $symbol: ${response.statusCode}');
 
           if (response.statusCode == 200) {
             final data = json.decode(response.body);
@@ -58,19 +54,16 @@ class YahooFinanceService {
                   change: change.toDouble(),
                   changePercent: changePercent.toDouble(),
                 );
-                print('Successfully fetched $symbol: \$${currentPrice.toDouble()}');
                 continue;
               }
             }
           }
-          
-          print('Failed to fetch $symbol from Yahoo Finance');
         } catch (e) {
-          print('Error fetching $symbol: $e');
+          // Error fetching symbol
         }
       }
     } catch (e) {
-      print('Error in getStockPrices: $e');
+      // Error in getStockPrices
     }
 
     return prices;
@@ -91,7 +84,7 @@ class YahooFinanceService {
         return currentPrice.toDouble();
       }
     } catch (e) {
-      print('Error fetching $symbol: $e');
+      // Error fetching stock price
     }
 
     return 0.0;

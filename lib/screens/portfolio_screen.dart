@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/portfolio_asset.dart';
 import '../services/coingecko_service.dart';
 import '../services/exchange_rate_service.dart';
+import '../services/finnhub_service.dart';
 import './portfolio_settings_screen.dart';
 
 class PortfolioScreen extends StatefulWidget {
@@ -17,9 +18,12 @@ class PortfolioScreen extends StatefulWidget {
 class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProviderStateMixin {
   final CoinGeckoService _coinGeckoService = CoinGeckoService();
   final ExchangeRateService _exchangeRateService = ExchangeRateService();
+  final FinnhubService _finnhubService = FinnhubService();
   
   Map<String, double> _cryptoPrices = {};
+  Map<String, double> _stockPrices = {};
   double _usdtTryRate = 34.5;
+  double _usdTryRate = 34.3;
   late AnimationController _animationController;
   List<PortfolioAsset> _assets = [];
 
@@ -41,19 +45,52 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
 
   Future<void> _loadData() async {
     try {
-      final prices = await _coinGeckoService.getCryptoPrices();
-      final usdtTry = await _exchangeRateService.getUsdtTryRate();
       final assets = await PortfolioAsset.getAssetsWithSettings();
+      
+      // Get crypto IDs from assets
+      final cryptoIds = assets
+          .where((asset) => asset.assetType == AssetType.crypto)
+          .map((asset) => asset.coingeckoId)
+          .toSet()
+          .toList();
+      
+      print('🔍 Crypto IDs to fetch: $cryptoIds');
+      
+      final prices = await _coinGeckoService.getCryptoPrices(cryptoIds: cryptoIds);
+      
+      print('💰 Fetched prices: ${prices.keys.toList()}');
+      
+      final usdtTry = await _exchangeRateService.getUsdtTryRate();
+      final usdTry = await _exchangeRateService.getUsdTryRate();
+      
+      // Get stock symbols
+      final stockSymbols = assets
+          .where((asset) => asset.assetType == AssetType.usStock || asset.assetType == AssetType.bistStock)
+          .map((asset) => asset.symbol)
+          .toSet()
+          .toList();
+      
+      print('📊 Stock symbols to fetch: $stockSymbols');
+      
+      Map<String, double> stockPricesMap = {};
+      if (stockSymbols.isNotEmpty) {
+        stockPricesMap = await _finnhubService.getStockPrices(stockSymbols);
+        print('💵 Fetched stock prices: $stockPricesMap');
+      }
       
       setState(() {
         _cryptoPrices = prices.map((key, value) => MapEntry(key, value.price));
+        _stockPrices = stockPricesMap;
         _usdtTryRate = usdtTry;
+        _usdTryRate = usdTry;
         _assets = assets;
       });
       
+      print('✅ Loaded prices for ${_cryptoPrices.length} cryptos and ${_stockPrices.length} stocks');
+      
       _animationController.forward(from: 0);
     } catch (e) {
-      // Handle error silently
+      print('❌ Error loading data: $e');
     }
   }
 
@@ -61,7 +98,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
     double total = 0;
     
     for (var asset in _assets) {
-      total += asset.getCurrentValue(_cryptoPrices, _usdtTryRate);
+      total += asset.getCurrentValue(_cryptoPrices, _usdtTryRate, stockPrices: _stockPrices, usdTryRate: _usdTryRate);
     }
     
     return total;
@@ -487,13 +524,17 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
   }
 
   Widget _buildAssetCard(PortfolioAsset asset) {
-    final price = _cryptoPrices[asset.symbol] ?? 0;
-    final valueTRY = asset.getCurrentValue(_cryptoPrices, _usdtTryRate);
-    final profitLoss = asset.getProfitLoss(_cryptoPrices, _usdtTryRate);
-    final profitPercent = asset.getProfitLossPercent(_cryptoPrices, _usdtTryRate);
+    final price = asset.assetType == AssetType.crypto 
+        ? (_cryptoPrices[asset.symbol] ?? 0) 
+        : (_stockPrices[asset.symbol] ?? 0);
+    final valueTRY = asset.getCurrentValue(_cryptoPrices, _usdtTryRate, stockPrices: _stockPrices, usdTryRate: _usdTryRate);
+    final profitLoss = asset.getProfitLoss(_cryptoPrices, _usdtTryRate, stockPrices: _stockPrices, usdTryRate: _usdTryRate);
+    final profitPercent = asset.getProfitLossPercent(_cryptoPrices, _usdtTryRate, stockPrices: _stockPrices, usdTryRate: _usdTryRate);
     final isProfit = profitLoss >= 0;
     final profitColor = isProfit ? Colors.green.shade400 : Colors.red.shade400;
-    final color = _getColorForAsset(PortfolioAsset.getAssets().indexOf(asset));
+    final defaultAssets = PortfolioAsset.getAssets();
+    final defaultIndex = defaultAssets.indexWhere((a) => a.symbol == asset.symbol);
+    final color = _getColorForAsset(defaultIndex >= 0 ? defaultIndex : _assets.indexOf(asset));
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),

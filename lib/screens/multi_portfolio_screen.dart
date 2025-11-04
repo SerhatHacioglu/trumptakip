@@ -53,7 +53,16 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
       });
 
       final portfolios = await PortfolioItem.getPortfoliosWithSettings();
-      final prices = await _coinGeckoService.getCryptoPrices();
+      
+      // Get crypto IDs from all portfolios
+      final cryptoIds = portfolios
+          .expand((p) => p.items)
+          .where((item) => item.type == AssetType.crypto && item.coingeckoId != null && item.coingeckoId!.isNotEmpty)
+          .map((item) => item.coingeckoId!)
+          .toSet()
+          .toList();
+      
+      final prices = await _coinGeckoService.getCryptoPrices(cryptoIds: cryptoIds);
       final usdtTry = await _exchangeRateService.getUsdtTryRate();
       final usdTry = await _exchangeRateService.getUsdTryRate();
       

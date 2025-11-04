@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/multi_portfolio.dart';
+import '../models/asset_suggestions.dart';
+import '../widgets/add_asset_dialog.dart';
 
 class MultiPortfolioSettingsScreen extends StatefulWidget {
   const MultiPortfolioSettingsScreen({super.key});
@@ -100,6 +102,9 @@ class _MultiPortfolioSettingsScreenState extends State<MultiPortfolioSettingsScr
       for (var key in keys) {
         await prefs.remove(key);
       }
+      // Reset custom and hidden assets
+      await prefs.remove('multi_portfolio_custom_assets');
+      await prefs.remove('multi_portfolio_hidden_assets');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -109,6 +114,90 @@ class _MultiPortfolioSettingsScreenState extends State<MultiPortfolioSettingsScr
           ),
         );
         _loadPortfolios();
+      }
+    }
+  }
+  
+  Future<void> _addAsset(PortfolioGroup portfolio) async {
+    if (!mounted) return;
+    
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => const AddAssetDialog(),
+    );
+
+    if (!mounted) return;
+    
+    if (result != null) {
+      final assetType = result['type'];
+      String typeEnum;
+      if (assetType == 'crypto') {
+        typeEnum = 'crypto';
+      } else if (assetType == 'usStock' || assetType == 'bistStock') {
+        typeEnum = 'stock';
+      } else {
+        typeEnum = 'cash';
+      }
+
+      final item = PortfolioItem(
+        symbol: result['symbol'],
+        name: result['name'],
+        emoji: result['emoji'],
+        amount: result['amount'],
+        type: AssetType.values.firstWhere((e) => e.toString() == 'AssetType.$typeEnum'),
+        coingeckoId: result['coingeckoId'],
+      );
+
+      await PortfolioItem.addCustomAsset(portfolio.id, item);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${result['symbol']} eklendi'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        await _loadPortfolios();
+      }
+    }
+  }
+
+  Future<void> _removeAsset(PortfolioGroup portfolio, PortfolioItem item) async {
+    if (!mounted) return;
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Varlığı Kaldır'),
+        content: Text('${item.symbol} varlığını kaldırmak istediğinizden emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Kaldır', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    
+    if (confirmed == true) {
+      await PortfolioItem.removeAsset(portfolio.id, item.symbol);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${item.symbol} kaldırıldı'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        await _loadPortfolios();
       }
     }
   }
@@ -207,6 +296,12 @@ class _MultiPortfolioSettingsScreenState extends State<MultiPortfolioSettingsScr
                     ),
                   ),
                 ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  color: color,
+                  onPressed: () => _addAsset(portfolio),
+                  tooltip: 'Varlık Ekle',
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -253,6 +348,15 @@ class _MultiPortfolioSettingsScreenState extends State<MultiPortfolioSettingsScr
                     color: _getTypeColor(item.type),
                   ),
                 ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 18),
+                color: Colors.red.shade400,
+                onPressed: () => _removeAsset(portfolio, item),
+                tooltip: 'Kaldır',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),

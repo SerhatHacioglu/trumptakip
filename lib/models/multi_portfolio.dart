@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'portfolio_asset.dart';
 
 class PortfolioGroup {
   final String id;
@@ -212,23 +213,152 @@ class PortfolioItem {
     final prefs = await SharedPreferences.getInstance();
     final defaultPortfolios = getDefaultPortfolios();
     
-    return defaultPortfolios.map((portfolio) {
-      return PortfolioGroup(
+    // Load custom assets
+    final customAssetsJson = prefs.getString('multi_portfolio_custom_assets') ?? '{}';
+    final Map<String, dynamic> customAssetsByPortfolio = json.decode(customAssetsJson);
+    
+    // Load hidden assets
+    final hiddenAssetsJson = prefs.getString('multi_portfolio_hidden_assets') ?? '{}';
+    final Map<String, dynamic> hiddenAssetsByPortfolio = json.decode(hiddenAssetsJson);
+    
+    // Process portfolios one by one to handle async operations
+    final List<PortfolioGroup> result = [];
+    
+    for (var portfolio in defaultPortfolios) {
+      // Special handling for portfolio_4 - sync with personal portfolio
+      if (portfolio.id == 'portfolio_4') {
+        // Get all personal portfolio assets (defaults + custom, excluding hidden)
+        final personalAssets = await PortfolioAsset.getAssetsWithSettings();
+        
+        final personalItems = personalAssets.map((asset) {
+          return PortfolioItem(
+            symbol: asset.symbol,
+            name: asset.name,
+            emoji: asset.emoji,
+            amount: asset.amount,
+            type: _convertAssetType(asset.assetType.toString()),
+            coingeckoId: asset.coingeckoId,
+          );
+        }).toList();
+        
+        result.add(PortfolioGroup(
+          id: portfolio.id,
+          name: prefs.getString('${portfolio.id}_name') ?? portfolio.name,
+          emoji: prefs.getString('${portfolio.id}_emoji') ?? portfolio.emoji,
+          items: personalItems,
+        ));
+        continue;
+      }
+      
+      // Get default items
+      final defaultItems = portfolio.items.map((item) {
+        final savedAmount = prefs.getDouble('${portfolio.id}_${item.symbol}_amount') ?? item.amount;
+        return PortfolioItem(
+          symbol: item.symbol,
+          name: item.name,
+          emoji: item.emoji,
+          amount: savedAmount,
+          type: item.type,
+          coingeckoId: item.coingeckoId,
+        );
+      }).toList();
+      
+      // Get custom items
+      final customItems = <PortfolioItem>[];
+      final customList = customAssetsByPortfolio[portfolio.id] as List<dynamic>?;
+      if (customList != null) {
+        for (var item in customList) {
+          customItems.add(PortfolioItem(
+            symbol: item['symbol'],
+            name: item['name'],
+            emoji: item['emoji'],
+            amount: item['amount'],
+            type: AssetType.values.firstWhere((e) => e.toString() == 'AssetType.${item['type']}'),
+            coingeckoId: item['coingeckoId'],
+          ));
+        }
+      }
+      
+      // Get hidden items
+      final hiddenList = (hiddenAssetsByPortfolio[portfolio.id] as List<dynamic>?) ?? [];
+      final hiddenSymbols = hiddenList.cast<String>().toSet();
+      
+      // Filter out hidden items and combine with custom items
+      final visibleDefaultItems = defaultItems.where((item) => !hiddenSymbols.contains(item.symbol)).toList();
+      
+      result.add(PortfolioGroup(
         id: portfolio.id,
         name: prefs.getString('${portfolio.id}_name') ?? portfolio.name,
         emoji: prefs.getString('${portfolio.id}_emoji') ?? portfolio.emoji,
-        items: portfolio.items.map((item) {
-          final savedAmount = prefs.getDouble('${portfolio.id}_${item.symbol}_amount') ?? item.amount;
-          return PortfolioItem(
-            symbol: item.symbol,
-            name: item.name,
-            emoji: item.emoji,
-            amount: savedAmount,
-            type: item.type,
-            coingeckoId: item.coingeckoId,
-          );
-        }).toList(),
-      );
-    }).toList();
+        items: [...visibleDefaultItems, ...customItems],
+      ));
+    }
+    
+    return result;
+  }
+  
+  static AssetType _convertAssetType(String assetTypeString) {
+    if (assetTypeString.contains('crypto')) {
+      return AssetType.crypto;
+    } else if (assetTypeString.contains('usStock') || assetTypeString.contains('bistStock')) {
+      return AssetType.stock;
+    } else {
+      return AssetType.cash;
+    }
+  }
+  
+  static Future<void> addCustomAsset(String portfolioId, PortfolioItem item) async {
+    final prefs = await SharedPreferences.getInstance();
+    final customAssetsJson = prefs.getString('multi_portfolio_custom_assets') ?? '{}';
+    final Map<String, dynamic> customAssetsByPortfolio = json.decode(customAssetsJson);
+    
+    final portfolioAssets = (customAssetsByPortfolio[portfolioId] as List<dynamic>?) ?? [];
+    portfolioAssets.add({
+      'symbol': item.symbol,
+      'name': item.name,
+      'emoji': item.emoji,
+      'amount': item.amount,
+      'type': item.type.toString().split('.').last,
+      'coingeckoId': item.coingeckoId,
+    });
+    
+    customAssetsByPortfolio[portfolioId] = portfolioAssets;
+    await prefs.setString('multi_portfolio_custom_assets', json.encode(customAssetsByPortfolio));
+  }
+  
+  static Future<void> removeAsset(String portfolioId, String symbol) async {
+    final prefs = await SharedPreferences.getInstance();
+    final defaultPortfolios = getDefaultPortfolios();
+    
+    // Check if it's a default asset
+    final defaultPortfolio = defaultPortfolios.firstWhere((p) => p.id == portfolioId);
+    final isDefault = defaultPortfolio.items.any((item) => item.symbol == symbol);
+    
+    if (isDefault) {
+      // Hide default asset
+      final hiddenAssetsJson = prefs.getString('multi_portfolio_hidden_assets') ?? '{}';
+      final Map<String, dynamic> hiddenAssetsByPortfolio = json.decode(hiddenAssetsJson);
+      
+      final hiddenList = (hiddenAssetsByPortfolio[portfolioId] as List<dynamic>?) ?? [];
+      if (!hiddenList.contains(symbol)) {
+        hiddenList.add(symbol);
+      }
+      hiddenAssetsByPortfolio[portfolioId] = hiddenList;
+      await prefs.setString('multi_portfolio_hidden_assets', json.encode(hiddenAssetsByPortfolio));
+    } else {
+      // Remove custom asset
+      final customAssetsJson = prefs.getString('multi_portfolio_custom_assets') ?? '{}';
+      final Map<String, dynamic> customAssetsByPortfolio = json.decode(customAssetsJson);
+      
+      final portfolioAssets = (customAssetsByPortfolio[portfolioId] as List<dynamic>?) ?? [];
+      portfolioAssets.removeWhere((item) => item['symbol'] == symbol);
+      customAssetsByPortfolio[portfolioId] = portfolioAssets;
+      await prefs.setString('multi_portfolio_custom_assets', json.encode(customAssetsByPortfolio));
+    }
+  }
+  
+  static Future<void> updateAssetAmount(String portfolioId, String symbol, double amount) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('${portfolioId}_${symbol}_amount', amount);
   }
 }

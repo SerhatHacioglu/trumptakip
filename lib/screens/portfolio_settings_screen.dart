@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/portfolio_asset.dart';
+import '../widgets/add_asset_dialog.dart';
 
 class PortfolioSettingsScreen extends StatefulWidget {
   const PortfolioSettingsScreen({super.key});
@@ -13,6 +15,7 @@ class PortfolioSettingsScreen extends StatefulWidget {
 class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
   final Map<String, TextEditingController> _amountControllers = {};
   final Map<String, TextEditingController> _investedControllers = {};
+  List<PortfolioAsset> _assets = [];
   bool _hasChanges = false;
 
   @override
@@ -33,35 +36,56 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final assets = PortfolioAsset.getAssets();
+    final assets = await PortfolioAsset.getAssetsWithSettings();
     
     for (var asset in assets) {
-      final savedAmount = prefs.getDouble('amount_${asset.symbol}') ?? asset.amount;
-      final savedInvested = prefs.getDouble('invested_${asset.symbol}') ?? asset.investedTRY;
-      
       _amountControllers[asset.symbol] = TextEditingController(
-        text: savedAmount.toStringAsFixed(4),
+        text: asset.amount.toStringAsFixed(4),
       );
       _investedControllers[asset.symbol] = TextEditingController(
-        text: savedInvested.toStringAsFixed(0),
+        text: asset.investedTRY.toStringAsFixed(0),
       );
     }
     
-    setState(() {});
+    setState(() {
+      _assets = assets;
+    });
   }
 
   Future<void> _saveSettings() async {
     final prefs = await SharedPreferences.getInstance();
     
-    for (var entry in _amountControllers.entries) {
-      final symbol = entry.key;
-      final amount = double.tryParse(entry.value.text) ?? 0;
+    // Save default assets settings
+    for (var asset in _assets.where((a) => !a.isCustom)) {
+      final symbol = asset.symbol;
+      final amount = double.tryParse(_amountControllers[symbol]?.text ?? '0') ?? 0;
       final invested = double.tryParse(_investedControllers[symbol]?.text ?? '0') ?? 0;
       
       await prefs.setDouble('amount_$symbol', amount);
       await prefs.setDouble('invested_$symbol', invested);
     }
+    
+    // Save custom assets with updated values
+    final customAssets = _assets.where((a) => a.isCustom).map((asset) {
+      final symbol = asset.symbol;
+      final amount = double.tryParse(_amountControllers[symbol]?.text ?? '0') ?? asset.amount;
+      final invested = double.tryParse(_investedControllers[symbol]?.text ?? '0') ?? asset.investedTRY;
+      
+      return PortfolioAsset(
+        symbol: asset.symbol,
+        name: asset.name,
+        emoji: asset.emoji,
+        amount: amount,
+        investedTRY: invested,
+        coingeckoId: asset.coingeckoId,
+        assetType: asset.assetType,
+        isCustom: true,
+      );
+    }).toList();
+    
+    // Save custom assets to JSON
+    await prefs.setString('custom_assets', 
+      jsonEncode(customAssets.map((a) => a.toJson()).toList()));
     
     setState(() {
       _hasChanges = false;
@@ -78,6 +102,74 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
       
       // Geri dön ve sayfayı yenile
       Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _addAsset() async {
+    if (!mounted) return;
+    
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => const AddAssetDialog(),
+    );
+    
+    if (!mounted) return;
+    
+    if (result != null) {
+      final asset = PortfolioAsset(
+        symbol: result['symbol'],
+        name: result['name'],
+        emoji: result['emoji'],
+        amount: result['amount'],
+        investedTRY: result['investedTRY'],
+        coingeckoId: result['coingeckoId'] ?? '',
+        assetType: AssetType.values.firstWhere(
+          (e) => e.toString() == 'AssetType.${result['type']}',
+          orElse: () => AssetType.crypto,
+        ),
+        isCustom: true,
+      );
+      
+      await PortfolioAsset.addCustomAsset(asset);
+      await _loadSettings();
+      setState(() {
+        _hasChanges = true;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Varlık eklendi'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeAsset(String symbol) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Varlık Sil'),
+        content: Text('$symbol varlığını silmek istediğinize emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true) {
+      await PortfolioAsset.removeCustomAsset(symbol);
+      await _loadSettings();
     }
   }
 
@@ -141,8 +233,6 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final assets = PortfolioAsset.getAssets();
-    
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -175,6 +265,11 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _addAsset,
+        icon: const Icon(Icons.add),
+        label: const Text('Varlık Ekle'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -213,7 +308,9 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
           const SizedBox(height: 24),
           
           // Asset listesi
-          ...assets.map((asset) => _buildAssetSettingCard(asset)),
+          ..._assets.map((asset) => _buildAssetSettingCard(asset)),
+          
+          const SizedBox(height: 80), // Space for FAB
         ],
       ),
       bottomNavigationBar: _hasChanges
@@ -262,7 +359,9 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
   }
 
   Widget _buildAssetSettingCard(PortfolioAsset asset) {
-    final color = _getColorForAsset(PortfolioAsset.getAssets().indexOf(asset));
+    final defaultAssets = PortfolioAsset.getAssets();
+    final defaultIndex = defaultAssets.indexWhere((a) => a.symbol == asset.symbol);
+    final color = _getColorForAsset(defaultIndex >= 0 ? defaultIndex : _assets.indexOf(asset));
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -312,13 +411,36 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        asset.symbol,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            asset.symbol,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          if (asset.isCustom) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                asset.assetType == AssetType.crypto ? 'CRYPTO' : 
+                                asset.assetType == AssetType.usStock ? 'US' : 'BIST',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
                         asset.name,
@@ -329,6 +451,11 @@ class _PortfolioSettingsScreenState extends State<PortfolioSettingsScreen> {
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _removeAsset(asset.symbol),
+                  tooltip: 'Sil',
                 ),
               ],
             ),
