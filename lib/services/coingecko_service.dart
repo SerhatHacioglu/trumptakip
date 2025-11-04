@@ -11,12 +11,15 @@ class CoinGeckoService {
           ? cryptoIds!.join(',')
           : 'bitcoin,ethereum,solana,avalanche-2,sui,ripple';
       
-      final url = Uri.parse('$_baseUrl/simple/price?ids=$ids&vs_currencies=usd');
+      // Use coins/markets endpoint to get price_change_percentage_24h
+      final url = Uri.parse(
+        '$_baseUrl/coins/markets?vs_currency=usd&ids=$ids&order=market_cap_desc&price_change_percentage=24h'
+      );
       
       final response = await http.get(url);
       
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(response.body);
         
         final Map<String, CryptoPrice> prices = {};
         
@@ -47,17 +50,17 @@ class CoinGeckoService {
         };
         
         // Iterate over the response and build the prices map
-        data.forEach((coinId, priceData) {
+        for (var coinData in data) {
+          final coinId = coinData['id'] as String;
           final symbol = idToSymbol[coinId] ?? coinId.toUpperCase();
-          if (priceData['usd'] != null) {
-            prices[symbol] = CryptoPrice(
-              symbol: symbol,
-              name: coinId, // Using coinId as name for now
-              price: priceData['usd'].toDouble(),
-              change24h: 0.0, // CoinGecko simple price doesn't include change
-            );
-          }
-        });
+          
+          prices[symbol] = CryptoPrice(
+            symbol: symbol,
+            name: coinData['name'] ?? coinId,
+            price: (coinData['current_price'] ?? 0).toDouble(),
+            change24h: (coinData['price_change_percentage_24h'] ?? 0).toDouble(),
+          );
+        }
         
         return prices;
       }
