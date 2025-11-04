@@ -21,26 +21,62 @@ async function sendTelegramMessage(text) {
   }
 }
 
-let lastPositions = [];
-let lastNotifiedPrice = {}; // Son bildirim gönderilen fiyat değerlerini sakla: {coin_side: markPrice}
-let lastNotifiedSize = {}; // Son bildirim gönderilen pozisyon miktarlarını sakla: {coin_side: size}
+let lastPositions = {
+  trump: [],
+  hyperunit: []
+};
+let lastNotifiedPrice = {
+  trump: {},
+  hyperunit: {}
+};
+let lastNotifiedSize = {
+  trump: {},
+  hyperunit: {}
+};
 
-const WALLET_ADDRESS = process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
+const WALLETS = {
+  trump: {
+    address: process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2',
+    name: 'Trump'
+  },
+  hyperunit: {
+    address: process.env.WALLET_ADDRESS_2 || '0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae',
+    name: 'HyperUnit'
+  }
+};
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
+
+// Ortak pozisyonları takip et (tekrarlı bildirim önlemek için)
+let commonPositionNotifications = {};
 
 // Pozisyonları kontrol et
 async function checkPositions() {
   try {
     console.log('Pozisyonlar kontrol ediliyor...', new Date().toISOString());
     
+    // Her iki cüzdanı da kontrol et
+    for (const [walletKey, walletInfo] of Object.entries(WALLETS)) {
+      await checkWalletPositions(walletKey, walletInfo);
+    }
+    
+  } catch (error) {
+    console.error('Pozisyon kontrolü hatası:', error.message);
+  }
+}
+
+// Tek bir cüzdanın pozisyonlarını kontrol et
+async function checkWalletPositions(walletKey, walletInfo) {
+  try {
+    const { address, name } = walletInfo;
+    
     // HyperLiquid API'den pozisyonları al
     const response = await axios.post(`${HYPERLIQUID_API}/info`, {
       type: 'clearinghouseState',
-      user: WALLET_ADDRESS
+      user: address
     });
     
     if (!response.data || !response.data.assetPositions) {
-      console.log('Pozisyon verisi bulunamadı');
+      console.log(`${name} - Pozisyon verisi bulunamadı`);
       return;
     }
     
@@ -74,15 +110,15 @@ async function checkPositions() {
       }
     }
     
-    console.log(`${currentPositions.length} açık pozisyon bulundu`);
+    console.log(`${name} - ${currentPositions.length} açık pozisyon bulundu`);
     
     // İlk çalıştırmada sadece kaydet
-    if (lastPositions.length === 0) {
-      lastPositions = currentPositions;
+    if (lastPositions[walletKey].length === 0) {
+      lastPositions[walletKey] = currentPositions;
       
       // Bot başlatma mesajı
       await sendTelegramMessage(
-        `🤖 <b>Bot Başlatıldı</b>\n\n` +
+        `🤖 <b>Bot Başlatıldı - ${name}</b>\n\n` +
         `📊 Mevcut ${currentPositions.length} pozisyon izleniyor\n` +
         `💡 Değişiklikler bildirilecek`
       );
@@ -95,7 +131,7 @@ async function checkPositions() {
         const sideEmoji = pos.side === 'LONG' ? '📈' : '📉';
         
         await sendTelegramMessage(
-          `${sideEmoji} <b>İZLENEN POZİSYON</b>\n\n` +
+          `${sideEmoji} <b>İZLENEN POZİSYON - ${name}</b>\n\n` +
           `💰 <b>${pos.coin}</b> ${pos.side}\n` +
           `📊 Miktar: ${pos.size.toFixed(4)}\n` +
           `🎯 Giriş: $${formatNumber(pos.entryPrice)}\n` +
@@ -105,21 +141,21 @@ async function checkPositions() {
         );
         
         // Başlangıç fiyatını ve miktarını kaydet
-        lastNotifiedPrice[positionKey] = pos.markPrice;
-        lastNotifiedSize[positionKey] = pos.size;
+        lastNotifiedPrice[walletKey][positionKey] = pos.markPrice;
+        lastNotifiedSize[walletKey][positionKey] = pos.size;
       }
       
       return;
     }
     
     // Değişiklikleri kontrol et
-    await compareAndNotify(currentPositions);
+    await compareAndNotify(walletKey, name, currentPositions);
     
     // Güncel pozisyonları kaydet
-    lastPositions = currentPositions;
+    lastPositions[walletKey] = currentPositions;
     
   } catch (error) {
-    console.error('Pozisyon kontrolü hatası:', error.message);
+    console.error(`${walletInfo.name} pozisyon kontrolü hatası:`, error.message);
   }
 }
 
@@ -132,18 +168,19 @@ function formatNumber(num) {
 const POSITION_CHANGE_THRESHOLD_USD = 3000000; // $3,000,000
 
 // Pozisyonları karşılaştır ve bildirim gönder
-async function compareAndNotify(currentPositions) {
+async function compareAndNotify(walletKey, walletName, currentPositions) {
+  const oldPositions = lastPositions[walletKey];
   
   // 1. Yeni pozisyon açıldı mı?
   for (const newPos of currentPositions) {
-    const exists = lastPositions.find(old => 
+    const exists = oldPositions.find(old => 
       old.coin === newPos.coin && old.side === newPos.side
     );
     
     if (!exists) {
       const emoji = newPos.side === 'LONG' ? '📈' : '📉';
       await sendTelegramMessage(
-        `${emoji} <b>YENİ POZİSYON AÇILDI</b>\n\n` +
+        `${emoji} <b>YENİ POZİSYON AÇILDI - ${walletName}</b>\n\n` +
         `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
         `📊 Miktar: ${newPos.size.toFixed(4)}\n` +
         `🎯 Giriş: $${formatNumber(newPos.entryPrice)}\n` +
@@ -154,7 +191,7 @@ async function compareAndNotify(currentPositions) {
   }
   
   // 2. Pozisyon kapandı mı?
-  for (const oldPos of lastPositions) {
+  for (const oldPos of oldPositions) {
     const exists = currentPositions.find(newPos => 
       newPos.coin === oldPos.coin && newPos.side === oldPos.side
     );
@@ -163,7 +200,7 @@ async function compareAndNotify(currentPositions) {
       const pnlEmoji = oldPos.unrealizedPnl >= 0 ? '✅' : '❌';
       const pnlSign = oldPos.unrealizedPnl >= 0 ? '+' : '-';
       await sendTelegramMessage(
-        `🔚 <b>POZİSYON KAPATILDI</b>\n\n` +
+        `🔚 <b>POZİSYON KAPATILDI - ${walletName}</b>\n\n` +
         `💰 <b>${oldPos.coin}</b> ${oldPos.side}\n` +
         `${pnlEmoji} P&L: ${pnlSign}$${formatNumber(oldPos.unrealizedPnl)}\n` +
         `🎯 Giriş: $${formatNumber(oldPos.entryPrice)}\n` +
@@ -174,17 +211,16 @@ async function compareAndNotify(currentPositions) {
   
   // 3. Pozisyona ekleme/azaltma yapıldı mı?
   for (const newPos of currentPositions) {
-    const oldPos = lastPositions.find(old => 
+    const oldPos = oldPositions.find(old => 
       old.coin === newPos.coin && old.side === newPos.side
     );
     
     if (oldPos) {
       const positionKey = `${newPos.coin}_${newPos.side}`;
-      const sizeDiff = newPos.size - oldPos.size;
       
       // Son bildirim gönderilen miktarı al (yoksa eski pozisyon miktarını kullan)
-      const lastNotifiedSizeValue = lastNotifiedSize[positionKey] !== undefined 
-        ? lastNotifiedSize[positionKey] 
+      const lastNotifiedSizeValue = lastNotifiedSize[walletKey][positionKey] !== undefined 
+        ? lastNotifiedSize[walletKey][positionKey] 
         : oldPos.size;
       
       // Son bildirime göre değişimi hesapla
@@ -197,10 +233,10 @@ async function compareAndNotify(currentPositions) {
       const sizeChangeValueUSD = Math.abs(sizeChangeFromLast * newPos.markPrice);
       const positionValueUSD = newPos.size * newPos.markPrice;
       
-      // ARTIŞ: Son bildirimden beri $150K+ artış varsa
+      // ARTIŞ: Son bildirimden beri $3M+ artış varsa
       if (sizeChangeFromLast > 0.0001 && sizeChangeValueUSD >= POSITION_CHANGE_THRESHOLD_USD) {
         await sendTelegramMessage(
-          `➕ <b>POZİSYONA EKLEME YAPILDI</b>\n\n` +
+          `➕ <b>POZİSYONA EKLEME YAPILDI - ${walletName}</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
           `📊 Eklenen: +${sizeChangeFromLast.toFixed(4)} (+${sizeChangePercent.toFixed(1)}%)\n` +
           `💵 Eklenen Değer: $${formatNumber(sizeChangeValueUSD)}\n` +
@@ -212,13 +248,13 @@ async function compareAndNotify(currentPositions) {
         );
         
         // Yeni miktarı kaydet
-        lastNotifiedSize[positionKey] = newPos.size;
+        lastNotifiedSize[walletKey][positionKey] = newPos.size;
       }
       
-      // AZALIŞ: Son bildirimden beri $150K+ azalış varsa
+      // AZALIŞ: Son bildirimden beri $3M+ azalış varsa
       if (sizeChangeFromLast < -0.0001 && sizeChangeValueUSD >= POSITION_CHANGE_THRESHOLD_USD) {
         await sendTelegramMessage(
-          `➖ <b>POZİSYON KISMİ KAPATILDI</b>\n\n` +
+          `➖ <b>POZİSYON KISMİ KAPATILDI - ${walletName}</b>\n\n` +
           `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
           `📊 Kapatılan: ${sizeChangeFromLast.toFixed(4)} (-${sizeChangePercent.toFixed(1)}%)\n` +
           `💵 Kapatılan Değer: $${formatNumber(sizeChangeValueUSD)}\n` +
@@ -229,64 +265,103 @@ async function compareAndNotify(currentPositions) {
         );
         
         // Yeni miktarı kaydet
-        lastNotifiedSize[positionKey] = newPos.size;
+        lastNotifiedSize[walletKey][positionKey] = newPos.size;
       }
       
       // İlk kez görüyorsak miktarı kaydet
-      if (lastNotifiedSize[positionKey] === undefined) {
-        lastNotifiedSize[positionKey] = newPos.size;
+      if (lastNotifiedSize[walletKey][positionKey] === undefined) {
+        lastNotifiedSize[walletKey][positionKey] = newPos.size;
       }
       
-      // 4. Fiyat %2'den fazla değişti mi? (Son gönderilen bildirime göre)
-      // positionKey zaten yukarıda tanımlı
-      const lastNotifiedValue = lastNotifiedPrice[positionKey];
-      
-      // İlk kez kontrol ediyorsak veya daha önce bildirim gönderilmişse
-      if (lastNotifiedValue !== undefined && lastNotifiedValue > 0) {
-        // Son bildirime göre fiyat değişimini hesapla
-        const priceDiff = newPos.markPrice - lastNotifiedValue;
-        const priceChangePercent = Math.abs((priceDiff / lastNotifiedValue) * 100);
-        
-        // Fiyat %2'den fazla değişti mi?
-        if (priceChangePercent >= 2) {
-          const isProfit = newPos.unrealizedPnl > 0;
-          const isPriceIncrease = priceDiff > 0;
-          
-          // Başlık: Fiyat artışı mı azalışı mı?
-          const changeDirection = isPriceIncrease ? '📈 YUKARI' : '📉 AŞAĞI';
-          const emoji = isProfit ? '💚' : '❤️';
-          
-          await sendTelegramMessage(
-            `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}</b>\n\n` +
-            `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-            `💵 Yeni Fiyat: $${formatNumber(newPos.markPrice)}\n` +
-            `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
-            `📍 Son Bildirim Fiyatı: $${formatNumber(lastNotifiedValue)}\n` +
-            `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}\n` +
-            `${emoji} Güncel P&L: ${isProfit ? '+' : ''}$${formatNumber(newPos.unrealizedPnl)}`
-          );
-          
-          // Yeni fiyatı kaydet
-          lastNotifiedPrice[positionKey] = newPos.markPrice;
-        }
-      } else {
-        // İlk kez görüyoruz, kaydet
-        lastNotifiedPrice[positionKey] = newPos.markPrice;
-      }
+      // 4. Fiyat %2'den fazla değişti mi? - ORTAK POZİSYONLAR İÇİN TEKİL BİLDİRİM
+      await checkPriceChangeWithDuplicationPrevention(walletKey, walletName, newPos, positionKey);
     }
   }
   
   // Kapanan pozisyonların fiyat ve miktar kayıtlarını temizle
-  for (const key in lastNotifiedPrice) {
+  for (const key in lastNotifiedPrice[walletKey]) {
     const [coin, side] = key.split('_');
     const exists = currentPositions.find(pos => 
       pos.coin === coin && pos.side === side
     );
     if (!exists) {
-      delete lastNotifiedPrice[key];
-      delete lastNotifiedSize[key];
+      delete lastNotifiedPrice[walletKey][key];
+      delete lastNotifiedSize[walletKey][key];
     }
   }
+}
+
+// Fiyat değişimini kontrol et - ortak pozisyonlar için tekrarlı bildirim önleme
+async function checkPriceChangeWithDuplicationPrevention(walletKey, walletName, newPos, positionKey) {
+  const lastNotifiedValue = lastNotifiedPrice[walletKey][positionKey];
+  
+  // İlk kez kontrol ediyorsak veya daha önce bildirim gönderilmişse
+  if (lastNotifiedValue !== undefined && lastNotifiedValue > 0) {
+    // Son bildirime göre fiyat değişimini hesapla
+    const priceDiff = newPos.markPrice - lastNotifiedValue;
+    const priceChangePercent = Math.abs((priceDiff / lastNotifiedValue) * 100);
+    
+    // Fiyat %2'den fazla değişti mi?
+    if (priceChangePercent >= 2) {
+      // Ortak pozisyon kontrolü: Her iki cüzdanda da var mı?
+      const commonKey = `${newPos.coin}_${newPos.side}`;
+      const isCommonPosition = isPositionInBothWallets(newPos.coin, newPos.side);
+      
+      // Ortak pozisyon ise ve yakın zamanda bildirim gönderildiyse, atla
+      if (isCommonPosition) {
+        const now = Date.now();
+        const lastNotification = commonPositionNotifications[commonKey];
+        
+        // Son 2 dakika içinde bildirim gönderildiyse ve fiyat yakınsa, atla
+        if (lastNotification && 
+            (now - lastNotification.lastNotifiedTime) < 120000 && // 2 dakika
+            Math.abs(newPos.markPrice - lastNotification.lastPrice) < (lastNotification.lastPrice * 0.01)) { // %1'den az fark
+          console.log(`Ortak pozisyon ${commonKey} için tekrarlı bildirim önlendi (${walletName})`);
+          return;
+        }
+        
+        // Bildirim gönder ve ortak pozisyon kaydını güncelle
+        commonPositionNotifications[commonKey] = {
+          lastPrice: newPos.markPrice,
+          lastNotifiedTime: now
+        };
+      }
+      
+      const isProfit = newPos.unrealizedPnl > 0;
+      const isPriceIncrease = priceDiff > 0;
+      
+      // Başlık: Fiyat artışı mı azalışı mı?
+      const changeDirection = isPriceIncrease ? '📈 YUKARI' : '📉 AŞAĞI';
+      const emoji = isProfit ? '💚' : '❤️';
+      
+      // Ortak pozisyon ise başlığa ekle
+      const commonTag = isCommonPosition ? ' [Her İki Cüzdan]' : '';
+      
+      await sendTelegramMessage(
+        `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}</b>\n` +
+        `<b>${walletName}${commonTag}</b>\n\n` +
+        `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
+        `💵 Yeni Fiyat: $${formatNumber(newPos.markPrice)}\n` +
+        `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
+        `📍 Son Bildirim Fiyatı: $${formatNumber(lastNotifiedValue)}\n` +
+        `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}\n` +
+        `${emoji} Güncel P&L: ${isProfit ? '+' : ''}$${formatNumber(newPos.unrealizedPnl)}`
+      );
+      
+      // Yeni fiyatı kaydet
+      lastNotifiedPrice[walletKey][positionKey] = newPos.markPrice;
+    }
+  } else {
+    // İlk kez görüyoruz, kaydet
+    lastNotifiedPrice[walletKey][positionKey] = newPos.markPrice;
+  }
+}
+
+// Her iki cüzdanda da aynı pozisyon var mı kontrol et
+function isPositionInBothWallets(coin, side) {
+  const trumpHasIt = lastPositions.trump.some(pos => pos.coin === coin && pos.side === side);
+  const hyperunitHasIt = lastPositions.hyperunit.some(pos => pos.coin === coin && pos.side === side);
+  return trumpHasIt && hyperunitHasIt;
 }
 
 // Her 1 dakikada bir kontrol et (istediğiniz süreyi ayarlayabilirsiniz)
@@ -308,7 +383,12 @@ app.get('/', (req, res) => {
     status: 'running',
     service: 'TrumpTakip Bot',
     timestamp: new Date().toISOString(),
-    positionsTracked: lastPositions.length
+    walletsTracked: Object.keys(WALLETS).length,
+    positionsTracked: {
+      trump: lastPositions.trump.length,
+      hyperunit: lastPositions.hyperunit.length,
+      total: lastPositions.trump.length + lastPositions.hyperunit.length
+    }
   });
 });
 
@@ -316,16 +396,29 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    lastCheck: lastPositions.length > 0 ? 'OK' : 'Waiting...',
-    positionsCount: lastPositions.length
+    wallets: {
+      trump: {
+        address: WALLETS.trump.address,
+        positions: lastPositions.trump.length
+      },
+      hyperunit: {
+        address: WALLETS.hyperunit.address,
+        positions: lastPositions.hyperunit.length
+      }
+    }
   });
 });
 
-app.get('/api/positions', async (req, res) => {
+app.get('/api/positions/:wallet', async (req, res) => {
   try {
+    const walletKey = req.params.wallet;
+    if (!WALLETS[walletKey]) {
+      return res.status(404).json({ error: 'Wallet not found' });
+    }
+    
     const response = await axios.post(`${HYPERLIQUID_API}/info`, {
       type: 'clearinghouseState',
-      user: WALLET_ADDRESS
+      user: WALLETS[walletKey].address
     });
     
     res.json(response.data);
@@ -349,5 +442,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Backend sunucu çalışıyor: http://localhost:${PORT}`);
   console.log('📱 Telegram Bot aktif');
   console.log('⏰ Pozisyon kontrolü her 1 dakikada bir yapılacak');
-  console.log(`💼 İzlenen wallet: ${WALLET_ADDRESS}`);
+  console.log('💼 İzlenen cüzdanlar:');
+  console.log(`   - Trump: ${WALLETS.trump.address}`);
+  console.log(`   - HyperUnit: ${WALLETS.hyperunit.address}`);
 });
