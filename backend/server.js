@@ -113,10 +113,16 @@ async function checkWalletPositions(walletKey, walletInfo) {
     console.log(`${name} - ${currentPositions.length} açık pozisyon bulundu`);
     
     // İlk çalıştırmada sadece kaydet
-    if (lastPositions[walletKey].length === 0) {
+    if (lastPositions[walletKey].length === 0 && currentPositions.length === 0) {
+      // Hiç pozisyon yok, sessizce kaydet
+      lastPositions[walletKey] = currentPositions;
+      return;
+    }
+    
+    if (lastPositions[walletKey].length === 0 && currentPositions.length > 0) {
       lastPositions[walletKey] = currentPositions;
       
-      // Bot başlatma mesajı
+      // Bot başlatma mesajı (sadece pozisyon varsa)
       await sendTelegramMessage(
         `🤖 <b>Bot Başlatıldı - ${name}</b>\n\n` +
         `📊 Mevcut ${currentPositions.length} pozisyon izleniyor\n` +
