@@ -307,15 +307,13 @@ async function checkPriceChangeWithDuplicationPrevention(walletKey, walletName, 
       const commonKey = `${newPos.coin}_${newPos.side}`;
       const isCommonPosition = isPositionInBothWallets(newPos.coin, newPos.side);
       
-      // Ortak pozisyon ise ve yakın zamanda bildirim gönderildiyse, atla
+      // Ortak pozisyon kontrolü
       if (isCommonPosition) {
         const now = Date.now();
         const lastNotification = commonPositionNotifications[commonKey];
         
-        // Son 2 dakika içinde bildirim gönderildiyse ve fiyat yakınsa, atla
-        if (lastNotification && 
-            (now - lastNotification.lastNotifiedTime) < 120000 && // 2 dakika
-            Math.abs(newPos.markPrice - lastNotification.lastPrice) < (lastNotification.lastPrice * 0.01)) { // %1'den az fark
+        // Son 90 saniye içinde bildirim gönderildiyse, atla (her iki cüzdan da 1 dakikada kontrol edilir)
+        if (lastNotification && (now - lastNotification.lastNotifiedTime) < 90000) {
           console.log(`Ortak pozisyon ${commonKey} için tekrarlı bildirim önlendi (${walletName})`);
           return;
         }
@@ -338,8 +336,7 @@ async function checkPriceChangeWithDuplicationPrevention(walletKey, walletName, 
       const commonTag = isCommonPosition ? ' [Her İki Cüzdan]' : '';
       
       await sendTelegramMessage(
-        `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}</b>\n` +
-        `<b>${walletName}${commonTag}</b>\n\n` +
+        `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}${commonTag}</b>\n\n` +
         `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
         `💵 Yeni Fiyat: $${formatNumber(newPos.markPrice)}\n` +
         `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
@@ -348,8 +345,13 @@ async function checkPriceChangeWithDuplicationPrevention(walletKey, walletName, 
         `${emoji} Güncel P&L: ${isProfit ? '+' : ''}$${formatNumber(newPos.unrealizedPnl)}`
       );
       
-      // Yeni fiyatı kaydet
+      // Yeni fiyatı her iki cüzdan için de kaydet (ortak pozisyon ise)
       lastNotifiedPrice[walletKey][positionKey] = newPos.markPrice;
+      if (isCommonPosition) {
+        // Diğer cüzdanın kaydını da güncelle
+        const otherWallet = walletKey === 'trump' ? 'hyperunit' : 'trump';
+        lastNotifiedPrice[otherWallet][positionKey] = newPos.markPrice;
+      }
     }
   } else {
     // İlk kez görüyoruz, kaydet
