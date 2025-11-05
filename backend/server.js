@@ -21,36 +21,95 @@ async function sendTelegramMessage(text) {
   }
 }
 
-let lastPositions = {
-  trump: [],
-  hyperunit: [],
-  wallet3: []
-};
-let lastNotifiedPrice = {
-  trump: {},
-  hyperunit: {},
-  wallet3: {}
-};
-let lastNotifiedSize = {
-  trump: {},
-  hyperunit: {},
-  wallet3: {}
-};
+// Dinamik wallet yönetimi
+let trackedWallets = {};
+let lastPositions = {};
+let lastNotifiedPrice = {};
+let lastNotifiedSize = {};
 
-const WALLETS = {
-  trump: {
+// Default wallets (backward compatibility)
+const DEFAULT_WALLETS = {
+  wallet1: {
     address: process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2',
-    name: 'Trump'
+    name: 'Cüzdan 1'
   },
-  hyperunit: {
+  wallet2: {
     address: process.env.WALLET_ADDRESS_2 || '0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae',
-    name: 'HyperUnit'
+    name: 'Cüzdan 2'
   },
   wallet3: {
     address: process.env.WALLET_ADDRESS_3 || '0x9263c1bd29aa87a118242f3fbba4517037f8cc7a',
-    name: 'Wallet 3'
+    name: 'Cüzdan 3'
   }
 };
+
+// Initialize with default wallets
+Object.entries(DEFAULT_WALLETS).forEach(([key, wallet]) => {
+  trackedWallets[key] = wallet;
+  lastPositions[key] = [];
+  lastNotifiedPrice[key] = {};
+  lastNotifiedSize[key] = {};
+});
+
+// API endpoint: Wallet listesini güncelle
+app.post('/api/wallets/sync', (req, res) => {
+  try {
+    const { wallets } = req.body;
+    
+    if (!Array.isArray(wallets)) {
+      return res.status(400).json({ error: 'Wallets must be an array' });
+    }
+
+    // Yeni wallet tracking yapısını oluştur
+    const newTrackedWallets = {};
+    const newLastPositions = {};
+    const newLastNotifiedPrice = {};
+    const newLastNotifiedSize = {};
+
+    wallets.forEach((wallet, index) => {
+      const key = `wallet_${wallet.id}`;
+      newTrackedWallets[key] = {
+        address: wallet.address,
+        name: wallet.name,
+        color: wallet.color
+      };
+      
+      // Eski verileri koru (eğer varsa)
+      newLastPositions[key] = lastPositions[key] || [];
+      newLastNotifiedPrice[key] = lastNotifiedPrice[key] || {};
+      newLastNotifiedSize[key] = lastNotifiedSize[key] || {};
+    });
+
+    // Global değişkenleri güncelle
+    trackedWallets = newTrackedWallets;
+    lastPositions = newLastPositions;
+    lastNotifiedPrice = newLastNotifiedPrice;
+    lastNotifiedSize = newLastNotifiedSize;
+
+    console.log(`✅ ${wallets.length} cüzdan senkronize edildi`);
+    
+    res.json({ 
+      success: true, 
+      message: `${wallets.length} cüzdan senkronize edildi`,
+      trackedWallets: Object.keys(trackedWallets)
+    });
+  } catch (error) {
+    console.error('Wallet senkronizasyon hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint: Aktif wallet listesini getir
+app.get('/api/wallets', (req, res) => {
+  res.json({
+    wallets: Object.entries(trackedWallets).map(([key, wallet]) => ({
+      key,
+      ...wallet
+    }))
+  });
+});
+
+// WALLETS referansını dinamik olarak kullan
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
 
 // Ortak pozisyonları takip et (tekrarlı bildirim önlemek için)
@@ -62,7 +121,7 @@ async function checkPositions() {
     console.log('Pozisyonlar kontrol ediliyor...', new Date().toISOString());
     
     // Tüm cüzdanları kontrol et
-    for (const [walletKey, walletInfo] of Object.entries(WALLETS)) {
+    for (const [walletKey, walletInfo] of Object.entries(trackedWallets)) {
       await checkWalletPositions(walletKey, walletInfo);
     }
     
@@ -458,6 +517,7 @@ app.listen(PORT, () => {
   console.log('📱 Telegram Bot aktif');
   console.log('⏰ Pozisyon kontrolü her 1 dakikada bir yapılacak');
   console.log('💼 İzlenen cüzdanlar:');
-  console.log(`   - Trump: ${WALLETS.trump.address}`);
-  console.log(`   - HyperUnit: ${WALLETS.hyperunit.address}`);
+  Object.entries(trackedWallets).forEach(([key, wallet]) => {
+    console.log(`   - ${wallet.name}: ${wallet.address}`);
+  });
 });

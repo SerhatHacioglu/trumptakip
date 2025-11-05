@@ -5,6 +5,7 @@ import '../models/position.dart';
 import '../models/wallet.dart';
 import '../services/hyperdash_service.dart';
 import '../services/coingecko_service.dart';
+import '../services/wallet_sync_service.dart';
 import '../widgets/add_wallet_dialog.dart';
 import 'portfolio_screen.dart';
 import 'multi_portfolio_screen.dart';
@@ -58,6 +59,10 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
         _walletPositions[wallet.id] = [];
       }
     });
+    
+    // Backend ile senkronize et
+    await WalletSyncService.syncWallets(wallets);
+    
     _refreshAllWallets();
   }
 

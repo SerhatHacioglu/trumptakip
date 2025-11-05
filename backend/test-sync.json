@@ -1,0 +1,16 @@
+{
+  "wallets": [
+    {
+      "id": "test-wallet-1",
+      "name": "Test Cüzdan 2",
+      "address": "0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae",
+      "color": "ff9c27b0"
+    },
+    {
+      "id": "test-wallet-2",
+      "name": "Test Cüzdan 3",
+      "address": "0x9263c1bd29aa87a118242f3fbba4517037f8cc7a",
+      "color": "ff4caf50"
+    }
+  ]
+}
