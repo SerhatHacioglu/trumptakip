@@ -23,15 +23,18 @@ async function sendTelegramMessage(text) {
 
 let lastPositions = {
   trump: [],
-  hyperunit: []
+  hyperunit: [],
+  wallet3: []
 };
 let lastNotifiedPrice = {
   trump: {},
-  hyperunit: {}
+  hyperunit: {},
+  wallet3: {}
 };
 let lastNotifiedSize = {
   trump: {},
-  hyperunit: {}
+  hyperunit: {},
+  wallet3: {}
 };
 
 const WALLETS = {
@@ -42,6 +45,10 @@ const WALLETS = {
   hyperunit: {
     address: process.env.WALLET_ADDRESS_2 || '0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae',
     name: 'HyperUnit'
+  },
+  wallet3: {
+    address: process.env.WALLET_ADDRESS_3 || '0x9263c1bd29aa87a118242f3fbba4517037f8cc7a',
+    name: 'Wallet 3'
   }
 };
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
@@ -54,7 +61,7 @@ async function checkPositions() {
   try {
     console.log('Pozisyonlar kontrol ediliyor...', new Date().toISOString());
     
-    // Her iki cüzdanı da kontrol et
+    // Tüm cüzdanları kontrol et
     for (const [walletKey, walletInfo] of Object.entries(WALLETS)) {
       await checkWalletPositions(walletKey, walletInfo);
     }

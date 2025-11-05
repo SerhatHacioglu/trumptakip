@@ -30,6 +30,12 @@ class _PositionsScreenState extends State<PositionsScreen> {
   bool _isWallet2Expanded = false;
   bool _isWallet2Loading = false;
   
+  // Cüzdan 3
+  final String wallet3Address = '0x9263c1bd29aa87a118242f3fbba4517037f8cc7a';
+  List<Position> _wallet3Positions = [];
+  bool _isWallet3Expanded = false;
+  bool _isWallet3Loading = false;
+  
   Map<String, CryptoPrice> _cryptoPrices = {};
   bool _isPricesLoading = false;
   String? _error;
@@ -40,12 +46,14 @@ class _PositionsScreenState extends State<PositionsScreen> {
     super.initState();
     _loadWallet1Positions();
     _loadWallet2Positions();
+    _loadWallet3Positions();
     _loadCryptoPrices();
     
     // Her 1 dakikada otomatik yenile
     _autoRefreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
       _loadWallet1Positions();
       _loadWallet2Positions();
+      _loadWallet3Positions();
       _loadCryptoPrices();
     });
   }
@@ -90,6 +98,24 @@ class _PositionsScreenState extends State<PositionsScreen> {
     } catch (e) {
       setState(() {
         _isWallet2Loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadWallet3Positions() async {
+    setState(() {
+      _isWallet3Loading = true;
+    });
+
+    try {
+      final positions = await _service.getOpenPositions(wallet3Address);
+      setState(() {
+        _wallet3Positions = positions;
+        _isWallet3Loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isWallet3Loading = false;
       });
     }
   }
@@ -200,6 +226,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
             onPressed: () async {
               await _loadWallet1Positions();
               await _loadWallet2Positions();
+              await _loadWallet3Positions();
             },
             tooltip: 'Yenile',
           ),
@@ -214,6 +241,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
       onRefresh: () async {
         await _loadWallet1Positions();
         await _loadWallet2Positions();
+        await _loadWallet3Positions();
         await _loadCryptoPrices();
       },
       child: ListView(
@@ -254,6 +282,23 @@ class _PositionsScreenState extends State<PositionsScreen> {
               });
             },
             color: Colors.purple,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Cüzdan 3
+          _buildWalletCard(
+            walletName: 'Cüzdan 3',
+            walletAddress: wallet3Address,
+            positions: _wallet3Positions,
+            isExpanded: _isWallet3Expanded,
+            isLoading: _isWallet3Loading,
+            onExpandToggle: () {
+              setState(() {
+                _isWallet3Expanded = !_isWallet3Expanded;
+              });
+            },
+            color: Colors.teal,
           ),
         ],
       ),
@@ -374,10 +419,11 @@ class _PositionsScreenState extends State<PositionsScreen> {
   }
 
   Widget _buildPositionPricesWidget() {
-    // Her iki cüzdandaki tüm pozisyonları topla
+    // Tüm cüzdanlardaki pozisyonları topla
     final allPositions = <Position>[
       ..._wallet1Positions,
       ..._wallet2Positions,
+      ..._wallet3Positions,
     ];
 
     if (allPositions.isEmpty) {
