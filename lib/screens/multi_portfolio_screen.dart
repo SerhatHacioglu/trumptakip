@@ -23,7 +23,7 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   Map<String, double> _stockPrices = {};
   double _usdtTryRate = 34.5;
   double _usdTryRate = 34.3;
-  double _targetAmount = 2000000;
+  double _targetAmount = 1500000;
   List<PortfolioGroup> _portfolios = [];
   bool _isLoading = true;
 
@@ -37,7 +37,7 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
   Future<void> _loadTarget() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _targetAmount = prefs.getDouble('portfolio_target') ?? 2000000;
+      _targetAmount = prefs.getDouble('portfolio_target') ?? 1500000;
     });
   }
 
@@ -115,7 +115,7 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
             autofocus: true,
             decoration: const InputDecoration(
               labelText: 'Hedef (TL)',
-              hintText: '2000000',
+              hintText: '1500000',
               suffixText: '₺',
               border: OutlineInputBorder(),
             ),
@@ -128,7 +128,7 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
             ),
             TextButton(
               onPressed: () {
-                final value = double.tryParse(targetText) ?? 2000000;
+                final value = double.tryParse(targetText) ?? 1500000;
                 Navigator.of(context).pop(value);
               },
               child: const Text('Kaydet'),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/positions_screen.dart';
+import 'screens/positions_screen_dynamic.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueGrey),
         useMaterial3: true,
       ),
-      home: const PositionsScreen(),
+      home: const PositionsScreenDynamic(),
     );
   }
 }
