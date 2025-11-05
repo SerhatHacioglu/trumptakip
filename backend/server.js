@@ -453,46 +453,50 @@ setTimeout(() => {
 
 // API endpoint'leri
 app.get('/', (req, res) => {
+  const totalPositions = Object.values(lastPositions).reduce((sum, positions) => sum + positions.length, 0);
+  
   res.json({ 
     status: 'running',
     service: 'TrumpTakip Bot',
     timestamp: new Date().toISOString(),
-    walletsTracked: Object.keys(WALLETS).length,
-    positionsTracked: {
-      trump: lastPositions.trump.length,
-      hyperunit: lastPositions.hyperunit.length,
-      total: lastPositions.trump.length + lastPositions.hyperunit.length
-    }
+    walletsTracked: Object.keys(trackedWallets).length,
+    totalPositions: totalPositions,
+    wallets: Object.entries(trackedWallets).map(([key, wallet]) => ({
+      key,
+      name: wallet.name,
+      address: wallet.address,
+      positions: lastPositions[key]?.length || 0
+    }))
   });
 });
 
 app.get('/api/health', (req, res) => {
+  const walletsInfo = {};
+  Object.entries(trackedWallets).forEach(([key, wallet]) => {
+    walletsInfo[key] = {
+      name: wallet.name,
+      address: wallet.address,
+      positions: lastPositions[key]?.length || 0
+    };
+  });
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    wallets: {
-      trump: {
-        address: WALLETS.trump.address,
-        positions: lastPositions.trump.length
-      },
-      hyperunit: {
-        address: WALLETS.hyperunit.address,
-        positions: lastPositions.hyperunit.length
-      }
-    }
+    wallets: walletsInfo
   });
 });
 
 app.get('/api/positions/:wallet', async (req, res) => {
   try {
     const walletKey = req.params.wallet;
-    if (!WALLETS[walletKey]) {
+    if (!trackedWallets[walletKey]) {
       return res.status(404).json({ error: 'Wallet not found' });
     }
     
     const response = await axios.post(`${HYPERLIQUID_API}/info`, {
       type: 'clearinghouseState',
-      user: WALLETS[walletKey].address
+      user: trackedWallets[walletKey].address
     });
     
     res.json(response.data);
