@@ -24,8 +24,14 @@ async function sendTelegramMessage(text) {
 // Dinamik wallet yönetimi
 let trackedWallets = {};
 let lastPositions = {};
-let lastNotifiedPrice = {};
 let lastNotifiedSize = {};
+
+// Kripto fiyat takibi (BTC, ETH, SOL) - Pozisyonlardan bağımsız
+let cryptoPrices = {
+  BTC: { currentPrice: 0, lastNotifiedPrice: 0 },
+  ETH: { currentPrice: 0, lastNotifiedPrice: 0 },
+  SOL: { currentPrice: 0, lastNotifiedPrice: 0 }
+};
 
 // Default wallets (backward compatibility)
 const DEFAULT_WALLETS = {
@@ -47,7 +53,6 @@ const DEFAULT_WALLETS = {
 Object.entries(DEFAULT_WALLETS).forEach(([key, wallet]) => {
   trackedWallets[key] = wallet;
   lastPositions[key] = [];
-  lastNotifiedPrice[key] = {};
   lastNotifiedSize[key] = {};
 });
 
@@ -63,7 +68,6 @@ app.post('/api/wallets/sync', (req, res) => {
     // Yeni wallet tracking yapısını oluştur
     const newTrackedWallets = {};
     const newLastPositions = {};
-    const newLastNotifiedPrice = {};
     const newLastNotifiedSize = {};
 
     wallets.forEach((wallet, index) => {
@@ -76,14 +80,12 @@ app.post('/api/wallets/sync', (req, res) => {
       
       // Eski verileri koru (eğer varsa)
       newLastPositions[key] = lastPositions[key] || [];
-      newLastNotifiedPrice[key] = lastNotifiedPrice[key] || {};
       newLastNotifiedSize[key] = lastNotifiedSize[key] || {};
     });
 
     // Global değişkenleri güncelle
     trackedWallets = newTrackedWallets;
     lastPositions = newLastPositions;
-    lastNotifiedPrice = newLastNotifiedPrice;
     lastNotifiedSize = newLastNotifiedSize;
 
     console.log(`✅ ${wallets.length} cüzdan senkronize edildi`);
@@ -111,9 +113,92 @@ app.get('/api/wallets', (req, res) => {
 
 // WALLETS referansını dinamik olarak kullan
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
+const BINANCE_API = 'https://api.binance.com/api/v3';
 
-// Ortak pozisyonları takip et (tekrarlı bildirim önlemek için)
-let commonPositionNotifications = {};
+// Binance'den kripto fiyatlarını al (BTC, ETH, SOL)
+async function fetchCryptoPricesFromBinance() {
+  try {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+    const prices = {};
+    
+    for (const symbol of symbols) {
+      try {
+        const response = await axios.get(`${BINANCE_API}/ticker/24hr`, {
+          params: { symbol }
+        });
+        
+        const coin = symbol.replace('USDT', '');
+        prices[coin] = parseFloat(response.data.lastPrice);
+      } catch (error) {
+        console.error(`${symbol} fiyatı alınamadı:`, error.message);
+      }
+    }
+    
+    return prices;
+  } catch (error) {
+    console.error('Binance fiyat alma hatası:', error.message);
+    return {};
+  }
+}
+
+// Bot başlatıldığında Binance'den başlangıç fiyatlarını al
+async function initializeCryptoPrices() {
+  console.log('🔄 Kripto fiyatları başlatılıyor (Binance)...');
+  const prices = await fetchCryptoPricesFromBinance();
+  
+  Object.entries(prices).forEach(([coin, price]) => {
+    cryptoPrices[coin].currentPrice = price;
+    cryptoPrices[coin].lastNotifiedPrice = price;
+    console.log(`✅ ${coin}: $${price.toFixed(2)}`);
+  });
+}
+
+// Kripto fiyat değişimlerini kontrol et (BTC, ETH, SOL)
+async function checkCryptoPrices() {
+  try {
+    console.log('🔍 Kripto fiyatları kontrol ediliyor...', new Date().toISOString());
+    
+    const prices = await fetchCryptoPricesFromBinance();
+    
+    for (const [coin, currentPrice] of Object.entries(prices)) {
+      if (!cryptoPrices[coin]) continue;
+      
+      cryptoPrices[coin].currentPrice = currentPrice;
+      const lastNotified = cryptoPrices[coin].lastNotifiedPrice;
+      
+      // İlk kez kontrol ediyorsak atla
+      if (lastNotified === 0) {
+        cryptoPrices[coin].lastNotifiedPrice = currentPrice;
+        continue;
+      }
+      
+      // Son bildirim fiyatına göre %2'den fazla değişim var mı?
+      const priceDiff = currentPrice - lastNotified;
+      const priceChangePercent = Math.abs((priceDiff / lastNotified) * 100);
+      
+      if (priceChangePercent >= 2) {
+        const isPriceIncrease = priceDiff > 0;
+        const changeDirection = isPriceIncrease ? '📈 YUKARI' : '📉 AŞAĞI';
+        const emoji = isPriceIncrease ? '🟢' : '🔴';
+        
+        await sendTelegramMessage(
+          `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}</b>\n\n` +
+          `💰 <b>${coin}/USDT</b>\n` +
+          `💵 Yeni Fiyat: $${formatNumber(currentPrice)}\n` +
+          `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
+          `📍 Son Bildirim Fiyatı: $${formatNumber(lastNotified)}\n` +
+          `🕐 ${new Date().toLocaleString('tr-TR')}`
+        );
+        
+        // Yeni fiyatı son bildirim fiyatı olarak kaydet
+        cryptoPrices[coin].lastNotifiedPrice = currentPrice;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Kripto fiyat kontrolü hatası:', error.message);
+  }
+}
 
 // Pozisyonları kontrol et
 async function checkPositions() {
@@ -212,8 +297,7 @@ async function checkWalletPositions(walletKey, walletInfo) {
           `⚡ Kaldıraç: ${Math.round(pos.leverage)}x`
         );
         
-        // Başlangıç fiyatını ve miktarını kaydet
-        lastNotifiedPrice[walletKey][positionKey] = pos.markPrice;
+        // Başlangıç miktarını kaydet
         lastNotifiedSize[walletKey][positionKey] = pos.size;
       }
       
@@ -344,111 +428,32 @@ async function compareAndNotify(walletKey, walletName, currentPositions) {
       if (lastNotifiedSize[walletKey][positionKey] === undefined) {
         lastNotifiedSize[walletKey][positionKey] = newPos.size;
       }
-      
-      // 4. Fiyat %2'den fazla değişti mi? - ORTAK POZİSYONLAR İÇİN TEKİL BİLDİRİM
-      await checkPriceChangeWithDuplicationPrevention(walletKey, walletName, newPos, positionKey);
     }
   }
   
-  // Kapanan pozisyonların fiyat ve miktar kayıtlarını temizle
-  for (const key in lastNotifiedPrice[walletKey]) {
+  // Kapanan pozisyonların miktar kayıtlarını temizle
+  for (const key in lastNotifiedSize[walletKey]) {
     const [coin, side] = key.split('_');
     const exists = currentPositions.find(pos => 
       pos.coin === coin && pos.side === side
     );
     if (!exists) {
-      delete lastNotifiedPrice[walletKey][key];
       delete lastNotifiedSize[walletKey][key];
     }
   }
 }
 
-// Fiyat değişimini kontrol et - ortak pozisyonlar için tekrarlı bildirim önleme
-async function checkPriceChangeWithDuplicationPrevention(walletKey, walletName, newPos, positionKey) {
-  const lastNotifiedValue = lastNotifiedPrice[walletKey][positionKey];
-  
-  // İlk kez kontrol ediyorsak veya daha önce bildirim gönderilmişse
-  if (lastNotifiedValue !== undefined && lastNotifiedValue > 0) {
-    // Son bildirime göre fiyat değişimini hesapla
-    const priceDiff = newPos.markPrice - lastNotifiedValue;
-    const priceChangePercent = Math.abs((priceDiff / lastNotifiedValue) * 100);
-    
-    // Fiyat %2'den fazla değişti mi?
-    if (priceChangePercent >= 2) {
-      // Ortak pozisyon kontrolü: Her iki cüzdanda da var mı?
-      const commonKey = `${newPos.coin}_${newPos.side}`;
-      const isCommonPosition = isPositionInBothWallets(newPos.coin, newPos.side);
-      
-      // Ortak pozisyon kontrolü
-      if (isCommonPosition) {
-        const now = Date.now();
-        const lastNotification = commonPositionNotifications[commonKey];
-        
-        // Son 90 saniye içinde bildirim gönderildiyse, atla (her iki cüzdan da 1 dakikada kontrol edilir)
-        if (lastNotification && (now - lastNotification.lastNotifiedTime) < 90000) {
-          console.log(`Ortak pozisyon ${commonKey} için tekrarlı bildirim önlendi (${walletName})`);
-          return;
-        }
-        
-        // Bildirim gönder ve ortak pozisyon kaydını güncelle
-        commonPositionNotifications[commonKey] = {
-          lastPrice: newPos.markPrice,
-          lastNotifiedTime: now
-        };
-      }
-      
-      const isProfit = newPos.unrealizedPnl > 0;
-      const isPriceIncrease = priceDiff > 0;
-      
-      // Başlık: Fiyat artışı mı azalışı mı?
-      const changeDirection = isPriceIncrease ? '📈 YUKARI' : '📉 AŞAĞI';
-      const emoji = isProfit ? '💚' : '❤️';
-      
-      // Ortak pozisyon ise başlığa ekle
-      const commonTag = isCommonPosition ? ' [Her İki Cüzdan]' : '';
-      
-      await sendTelegramMessage(
-        `${emoji} <b>ÖNEMLİ FİYAT HAREKETİ - ${changeDirection}${commonTag}</b>\n\n` +
-        `💰 <b>${newPos.coin}</b> ${newPos.side}\n` +
-        `💵 Yeni Fiyat: $${formatNumber(newPos.markPrice)}\n` +
-        `${isPriceIncrease ? '⬆️' : '⬇️'} Değişim: ${isPriceIncrease ? '+' : ''}$${formatNumber(priceDiff)} (${isPriceIncrease ? '+' : '-'}${priceChangePercent.toFixed(2)}%)\n` +
-        `📍 Son Bildirim Fiyatı: $${formatNumber(lastNotifiedValue)}\n` +
-        `🎯 Giriş Fiyatı: $${formatNumber(newPos.entryPrice)}\n` +
-        `${emoji} Güncel P&L: ${isProfit ? '+' : ''}$${formatNumber(newPos.unrealizedPnl)}`
-      );
-      
-      // Yeni fiyatı her iki cüzdan için de kaydet (ortak pozisyon ise)
-      lastNotifiedPrice[walletKey][positionKey] = newPos.markPrice;
-      if (isCommonPosition) {
-        // Diğer cüzdanın kaydını da güncelle
-        const otherWallet = walletKey === 'trump' ? 'hyperunit' : 'trump';
-        lastNotifiedPrice[otherWallet][positionKey] = newPos.markPrice;
-      }
-    }
-  } else {
-    // İlk kez görüyoruz, kaydet
-    lastNotifiedPrice[walletKey][positionKey] = newPos.markPrice;
-  }
-}
-
-// Her iki cüzdanda da aynı pozisyon var mı kontrol et
-function isPositionInBothWallets(coin, side) {
-  const trumpHasIt = lastPositions.trump.some(pos => pos.coin === coin && pos.side === side);
-  const hyperunitHasIt = lastPositions.hyperunit.some(pos => pos.coin === coin && pos.side === side);
-  return trumpHasIt && hyperunitHasIt;
-}
-
-// Her 1 dakikada bir kontrol et (istediğiniz süreyi ayarlayabilirsiniz)
-// '*/1 * * * *' = Her dakika
-// '*/5 * * * *' = Her 5 dakika
-// '*/10 * * * *' = Her 10 dakika
+// Her 1 dakikada bir kontrol et
+// Pozisyonlar ve kripto fiyatları için ayrı ayrı kontrol
 cron.schedule('*/1 * * * *', () => {
   checkPositions();
+  checkCryptoPrices();
 });
 
-// Sunucu başladığında bir kez kontrol et
-setTimeout(() => {
-  checkPositions();
+// Sunucu başladığında başlangıç işlemleri
+setTimeout(async () => {
+  await initializeCryptoPrices();
+  await checkPositions();
 }, 5000);
 
 // API endpoint'leri
@@ -509,10 +514,19 @@ app.get('/api/positions/:wallet', async (req, res) => {
 app.post('/api/check-now', async (req, res) => {
   try {
     await checkPositions();
+    await checkCryptoPrices();
     res.json({ success: true, message: 'Kontrol başlatıldı' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Kripto fiyatları endpoint'i
+app.get('/api/crypto-prices', (req, res) => {
+  res.json({
+    prices: cryptoPrices,
+    timestamp: new Date().toISOString()
+  });
 });
 
 const PORT = process.env.PORT || 3000;
@@ -520,6 +534,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Backend sunucu çalışıyor: http://localhost:${PORT}`);
   console.log('📱 Telegram Bot aktif');
   console.log('⏰ Pozisyon kontrolü her 1 dakikada bir yapılacak');
+  console.log('📈 Kripto fiyat takibi aktif (BTC, ETH, SOL)');
   console.log('💼 İzlenen cüzdanlar:');
   Object.entries(trackedWallets).forEach(([key, wallet]) => {
     console.log(`   - ${wallet.name}: ${wallet.address}`);
