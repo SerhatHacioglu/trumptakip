@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/multi_portfolio.dart';
-import '../models/asset_suggestions.dart';
 import '../widgets/add_asset_dialog.dart';
 
 class MultiPortfolioSettingsScreen extends StatefulWidget {

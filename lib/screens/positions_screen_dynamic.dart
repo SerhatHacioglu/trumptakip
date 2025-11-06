@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../models/wallet.dart';
 import '../services/hyperdash_service.dart';
-import '../services/coingecko_service.dart';
+import '../services/binance_service.dart';
 import '../services/wallet_sync_service.dart';
 import '../widgets/add_wallet_dialog.dart';
 import 'portfolio_screen.dart';
@@ -19,14 +19,14 @@ class PositionsScreenDynamic extends StatefulWidget {
 
 class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
   final HyperDashService _service = HyperDashService();
-  final CoinGeckoService _coinGeckoService = CoinGeckoService();
+  final BinanceService _binanceService = BinanceService();
   
   List<Wallet> _wallets = [];
   final Map<String, List<Position>> _walletPositions = {};
   final Map<String, bool> _walletExpandedStates = {};
   final Map<String, bool> _walletLoadingStates = {};
   
-  Map<String, CryptoPrice> _cryptoPrices = {};
+  Map<String, dynamic> _cryptoPrices = {}; // HyperDash + Binance
   bool _isPricesLoading = false;
   Timer? _autoRefreshTimer;
 
@@ -96,9 +96,46 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
     });
 
     try {
-      final prices = await _coinGeckoService.getCryptoPrices();
+      Map<String, dynamic> allPrices = {};
+      
+      // 1. Binance'den BTC, ETH, SOL, XRP, AVAX çek
+      try {
+        final binancePrices = await _binanceService.getCryptoPrices();
+        binancePrices.forEach((symbol, priceObj) {
+          allPrices[symbol] = {
+            'price': priceObj.price,
+            'change24h': priceObj.change24h,
+          };
+        });
+      } catch (e) {
+        // Binance hatası olursa devam et
+      }
+      
+      // 2. Pozisyonlardaki coinleri kontrol et
+      // Binance'de OLMAYAN coinleri ekle (BTC, ETH, SOL, XRP, AVAX hariç)
+      final binanceCoins = {'BTC', 'ETH', 'SOL', 'XRP', 'AVAX'};
+      
+      for (var positions in _walletPositions.values) {
+        for (var position in positions) {
+          final coinSymbol = position.coin;
+          
+          // Eğer Binance'de yoksa, HyperDash'ten ekle
+          if (!binanceCoins.contains(coinSymbol) && !allPrices.containsKey(coinSymbol)) {
+            // Entry'den mevcut fiyata olan değişim yüzdesi
+            final priceChange = position.entryPrice > 0
+                ? ((position.markPrice - position.entryPrice) / position.entryPrice * 100)
+                : 0.0;
+            
+            allPrices[coinSymbol] = {
+              'price': position.markPrice,
+              'change24h': priceChange,
+            };
+          }
+        }
+      }
+      
       setState(() {
-        _cryptoPrices = prices;
+        _cryptoPrices = allPrices;
         _isPricesLoading = false;
       });
     } catch (e) {
@@ -158,8 +195,9 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
 
   @override
   Widget build(BuildContext context) {
-    final btcPrice = _cryptoPrices['BTC'];
-    final btcChange = btcPrice?.change24h ?? 0;
+    final btcPriceData = _cryptoPrices['BTC'] as Map<String, dynamic>?;
+    final btcPrice = btcPriceData != null ? (btcPriceData['price'] as num?)?.toDouble() : null;
+    final btcChange = btcPriceData != null ? (btcPriceData['change24h'] as num?)?.toDouble() ?? 0 : 0;
     final isBtcPositive = btcChange >= 0;
     
     return Scaffold(
@@ -167,21 +205,21 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        title: btcPrice != null
+        title: btcPriceData != null
             ? Row(
                 children: [
                   Text(
                     'BTC ',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     ),
                   ),
                   Text(
-                    '\$${btcPrice.price.toStringAsFixed(0)}',
+                    '\$${btcPrice!.toStringAsFixed(0)}',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
@@ -190,12 +228,12 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                   Icon(
                     isBtcPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
                     color: isBtcPositive ? Colors.green.shade400 : Colors.red.shade400,
-                    size: 18,
+                    size: 24,
                   ),
                   Text(
                     '${btcChange.abs().toStringAsFixed(1)}%',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: isBtcPositive ? Colors.green.shade400 : Colors.red.shade400,
                     ),
@@ -205,7 +243,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
             : Text(
                 'HyperLiquid',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
@@ -330,8 +368,11 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
       );
     }
 
-    final displayPrices = Map<String, CryptoPrice>.from(_cryptoPrices);
-    displayPrices.remove('BTC');
+    // Sadece ETH, SOL, XRP, AVAX göster (BTC AppBar'da)
+    final displayCoins = ['ETH', 'SOL', 'XRP', 'AVAX'];
+    final displayPrices = Map<String, dynamic>.fromEntries(
+      _cryptoPrices.entries.where((e) => displayCoins.contains(e.key))
+    );
 
     if (displayPrices.isEmpty) {
       return const SizedBox.shrink(key: ValueKey('crypto_prices_empty'));
@@ -348,9 +389,25 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: displayPrices.entries.map((entry) {
-          final crypto = entry.value;
-          final isPositive = crypto.change24h >= 0;
-          final changeColor = isPositive ? Colors.green.shade400 : Colors.red.shade400;
+          try {
+            final priceData = entry.value as Map<String, dynamic>;
+            final price = (priceData['price'] as num?)?.toDouble() ?? 0.0;
+            final change24h = (priceData['change24h'] as num?)?.toDouble() ?? 0.0;
+            final isPositive = change24h >= 0;
+            final changeColor = isPositive ? Colors.green.shade400 : Colors.red.shade400;
+          
+          // Fiyat formatı
+          String priceText;
+          if (entry.key == 'ETH') {
+            // ETH için virgülsüz
+            priceText = '\$${price.toStringAsFixed(0)}';
+          } else if (entry.key == 'XRP') {
+            // XRP için 4 basamak
+            priceText = '\$${price.toStringAsFixed(4)}';
+          } else {
+            // Diğerleri için 2 basamak
+            priceText = '\$${price.toStringAsFixed(2)}';
+          }
 
           return Expanded(
             child: Column(
@@ -359,16 +416,16 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                 Text(
                   entry.key,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '\$${crypto.price.toStringAsFixed(2)}',
+                  priceText,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
@@ -380,12 +437,12 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     Icon(
                       isPositive ? Icons.arrow_drop_up : Icons.arrow_drop_down,
                       color: changeColor,
-                      size: 16,
+                      size: 20,
                     ),
                     Text(
-                      '${isPositive ? '+' : ''}${crypto.change24h.toStringAsFixed(2)}%',
+                      '${isPositive ? '+' : ''}${change24h.toStringAsFixed(2)}%',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: changeColor,
                       ),
@@ -395,6 +452,10 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
               ],
             ),
           );
+          } catch (e) {
+            // Hatalı coin varsa gösterme
+            return const SizedBox.shrink();
+          }
         }).toList(),
       ),
     );
@@ -410,12 +471,20 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
       return const SizedBox.shrink(key: ValueKey('position_prices_empty'));
     }
 
+    // Binance'de olmayan coinleri topla (BTC, ETH, SOL, XRP, AVAX hariç)
+    final binanceCoins = {'BTC', 'ETH', 'SOL', 'XRP', 'AVAX'};
     final Map<String, double> uniqueCoins = {};
+    
     for (var position in allPositions) {
       final coinSymbol = position.coin.replaceAll('USDT', '').replaceAll('PERP', '');
-      if (!uniqueCoins.containsKey(coinSymbol)) {
+      if (!binanceCoins.contains(coinSymbol) && !uniqueCoins.containsKey(coinSymbol)) {
         uniqueCoins[coinSymbol] = position.markPrice;
       }
+    }
+
+    // Eğer Binance dışı coin yoksa gösterme
+    if (uniqueCoins.isEmpty) {
+      return const SizedBox.shrink(key: ValueKey('position_prices_empty'));
     }
 
     final sortedCoins = uniqueCoins.entries.toList()
@@ -446,14 +515,14 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
             children: [
               Icon(
                 Icons.trending_up,
-                size: 16,
+                size: 20,
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: 6),
               Text(
                 'Açık Pozisyon Fiyatları',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 ),
@@ -480,7 +549,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     Text(
                       entry.key,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -489,7 +558,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     Text(
                       '\$${entry.value.toStringAsFixed(2)}',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
@@ -641,39 +710,13 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                                   child: Text(
                                     wallet.name,
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 20,
                                       fontWeight: FontWeight.bold,
                                       color: wallet.color,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (positions.isNotEmpty && avgLeverage > 15) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: Colors.orange, width: 1),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.warning_amber, size: 10, color: Colors.orange),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          'Risk',
-                                          style: TextStyle(
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.orange,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
                               ],
                             ),
                             const SizedBox(height: 3),
@@ -704,14 +747,14 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                                 children: [
                                   Icon(
                                     Icons.circle,
-                                    size: 5,
+                                    size: 6,
                                     color: Colors.green.shade400,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
                                     wallet.shortAddress,
                                     style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 14,
                                       color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -719,7 +762,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                                   const SizedBox(width: 3),
                                   Icon(
                                     Icons.copy_rounded,
-                                    size: 10,
+                                    size: 14,
                                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                   ),
                                 ],
@@ -730,7 +773,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                       ),
                       // Edit ve Delete butonları
                       IconButton(
-                        icon: Icon(Icons.edit, size: 16, color: wallet.color.withOpacity(0.7)),
+                        icon: Icon(Icons.edit, size: 20, color: wallet.color.withOpacity(0.7)),
                         onPressed: () => _showAddWalletDialog(wallet: wallet),
                         tooltip: 'Düzenle',
                         padding: EdgeInsets.zero,
@@ -738,7 +781,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                       ),
                       const SizedBox(width: 4),
                       IconButton(
-                        icon: Icon(Icons.delete, size: 16, color: Colors.red.shade400.withOpacity(0.7)),
+                        icon: Icon(Icons.delete, size: 20, color: Colors.red.shade400.withOpacity(0.7)),
                         onPressed: () => _deleteWallet(wallet),
                         tooltip: 'Sil',
                         padding: EdgeInsets.zero,
@@ -783,7 +826,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           'Yükleniyor...',
                           style: TextStyle(
                             color: wallet.color,
-                            fontSize: 11,
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -799,7 +842,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                       children: [
                         Icon(
                           Icons.inbox_outlined,
-                          size: 40,
+                          size: 48,
                           color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
                         ),
                         const SizedBox(height: 6),
@@ -807,7 +850,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           'Açık pozisyon yok',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                            fontSize: 12,
+                            fontSize: 16,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -833,13 +876,13 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.local_fire_department, color: Colors.orange, size: 14),
+                        Icon(Icons.local_fire_department, color: Colors.orange, size: 18),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             'En Karlı: ${topGainer.coin} ',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
@@ -974,12 +1017,12 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
   }) {
     return Column(
       children: [
-        Icon(icon, size: 15, color: color.withOpacity(0.7)),
+        Icon(icon, size: 20, color: color.withOpacity(0.7)),
         const SizedBox(height: 4),
         Text(
           label,
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 13,
             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
             fontWeight: FontWeight.w500,
           ),
@@ -991,7 +1034,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
             color: color,
           ),
@@ -1004,7 +1047,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
           Text(
             subtitle,
             style: TextStyle(
-              fontSize: 8,
+              fontSize: 12,
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
               fontWeight: FontWeight.w500,
             ),
@@ -1065,7 +1108,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                 child: Text(
                   position.coin.substring(0, position.coin.length > 3 ? 3 : position.coin.length),
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: walletColor,
                   ),
@@ -1085,7 +1128,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                         Text(
                           position.coin,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1098,7 +1141,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           child: Text(
                             isLong ? 'LONG' : 'SHORT',
                             style: const TextStyle(
-                              fontSize: 8,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -1115,7 +1158,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           child: Text(
                             '${position.leverage.toStringAsFixed(1)}x',
                             style: TextStyle(
-                              fontSize: 8,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: position.leverage > 15 ? Colors.orange : walletColor,
                             ),
@@ -1127,7 +1170,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     Text(
                       '\$${_formatPriceNoShorthand(price)}',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 14,
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ),
@@ -1153,14 +1196,14 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                     Text(
                       '\$${_formatPrice(positionValue)}',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       '${isPnlPositive ? '+' : ''}\$${_formatPrice(position.unrealizedPnl)}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: pnlColor,
                       ),
@@ -1174,7 +1217,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                       child: Text(
                         '${isPnlPositive ? '+' : ''}${pnlPercentage.toStringAsFixed(1)}%',
                         style: TextStyle(
-                          fontSize: 8,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: pnlColor,
                         ),
@@ -1227,9 +1270,6 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
               ],
             ),
           ),
-          
-          const SizedBox(height: 6),
-          _buildRiskIndicator(position, price, walletColor),
         ],
       ),
     );
@@ -1270,93 +1310,6 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
           overflow: TextOverflow.ellipsis,
         ),
       ],
-    );
-  }
-
-  Widget _buildRiskIndicator(Position position, double currentPrice, Color walletColor) {
-    final isLong = position.side == 'LONG';
-    final liqPrice = position.liquidationPrice;
-    
-    // Calculate distance to liquidation
-    double distancePercent;
-    if (isLong) {
-      distancePercent = ((currentPrice - liqPrice) / currentPrice * 100);
-    } else {
-      distancePercent = ((liqPrice - currentPrice) / currentPrice * 100);
-    }
-    
-    // Determine risk level
-    Color riskColor;
-    String riskText;
-    IconData riskIcon;
-    
-    if (distancePercent > 50) {
-      riskColor = Colors.green;
-      riskText = 'Güvenli';
-      riskIcon = Icons.check_circle;
-    } else if (distancePercent > 25) {
-      riskColor = Colors.orange;
-      riskText = 'Orta';
-      riskIcon = Icons.warning;
-    } else {
-      riskColor = Colors.red;
-      riskText = 'Yüksek';
-      riskIcon = Icons.error;
-    }
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: riskColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: riskColor.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(riskIcon, size: 12, color: riskColor),
-          const SizedBox(width: 4),
-          Text(
-            'Risk: ',
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            riskText,
-            style: TextStyle(
-              fontSize: 10,
-              color: riskColor,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '•',
-            style: TextStyle(
-              fontSize: 10,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              'Liq\'e ${distancePercent.abs().toStringAsFixed(1)}%',
-              style: TextStyle(
-                fontSize: 9,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

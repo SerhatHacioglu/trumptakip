@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/portfolio_asset.dart';
 import '../services/coingecko_service.dart';
 import '../services/exchange_rate_service.dart';
@@ -54,11 +53,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
           .toSet()
           .toList();
       
-      print('🔍 Crypto IDs to fetch: $cryptoIds');
-      
       final prices = await _coinGeckoService.getCryptoPrices(cryptoIds: cryptoIds);
-      
-      print('💰 Fetched prices: ${prices.keys.toList()}');
       
       final usdtTry = await _exchangeRateService.getUsdtTryRate();
       final usdTry = await _exchangeRateService.getUsdTryRate();
@@ -70,12 +65,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
           .toSet()
           .toList();
       
-      print('📊 Stock symbols to fetch: $stockSymbols');
-      
       Map<String, double> stockPricesMap = {};
       if (stockSymbols.isNotEmpty) {
         stockPricesMap = await _finnhubService.getStockPrices(stockSymbols);
-        print('💵 Fetched stock prices: $stockPricesMap');
       }
       
       setState(() {
@@ -86,11 +78,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
         _assets = assets;
       });
       
-      print('✅ Loaded prices for ${_cryptoPrices.length} cryptos and ${_stockPrices.length} stocks');
-      
       _animationController.forward(from: 0);
     } catch (e) {
-      print('❌ Error loading data: $e');
+      // Hata durumunda sessizce devam et
     }
   }
 
@@ -114,9 +104,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> with SingleTickerProv
     final initialInvestment = _getTotalInvested();
     final targetAmount = initialInvestment; // Hedef = Toplam yatırım
     final profitLossTRY = currentValueTRY - initialInvestment;
-    final profitLossPercent = initialInvestment > 0 
-        ? (profitLossTRY / initialInvestment) * 100.0
-        : 0.0;
     final requiredGrowth = (currentValueTRY > 0) ? (((targetAmount - currentValueTRY) / currentValueTRY) * 100).toDouble() : 0.0;
     final isAboveTarget = currentValueTRY >= targetAmount;
     final isProfit = profitLossTRY >= 0;

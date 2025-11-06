@@ -209,7 +209,6 @@ class _MultiPortfolioScreenState extends State<MultiPortfolioScreen> {
 
   Widget _buildTotalValueCard(double totalValue) {
     final difference = totalValue - _targetAmount;
-    final percentage = (_targetAmount > 0) ? (totalValue / _targetAmount * 100) : 0;
     final requiredGrowth = (totalValue > 0) ? (((_targetAmount - totalValue) / totalValue) * 100) : 0;
     final isAboveTarget = totalValue >= _targetAmount;
     final profitColor = isAboveTarget ? Colors.green.shade400 : Colors.deepPurple.shade400;

@@ -1,11 +1,18 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import '../models/wallet.dart';
 
 class WalletSyncService {
   // Backend URL'ini environment'a göre ayarla
-  static const String baseUrl = 'http://localhost:3000'; // Geliştirme
-  // static const String baseUrl = 'https://your-backend-url.com'; // Production
+  static String get baseUrl {
+    // APK/Release modda production URL kullan
+    if (!kDebugMode || !kIsWeb) {
+      return 'https://trumptakip-bot.onrender.com'; // Production
+    }
+    // Debug/Web modda localhost kullan
+    return 'http://localhost:3000';
+  }
   
   /// Wallet listesini backend ile senkronize et
   static Future<bool> syncWallets(List<Wallet> wallets) async {
@@ -24,15 +31,11 @@ class WalletSyncService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        print('✅ Backend senkronizasyonu başarılı: ${data['message']}');
         return true;
       } else {
-        print('❌ Backend senkronizasyon hatası: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('❌ Backend senkronizasyon hatası: $e');
       // Backend erişilemezse bile app çalışmaya devam etsin
       return false;
     }
@@ -51,7 +54,6 @@ class WalletSyncService {
       }
       return null;
     } catch (e) {
-      print('❌ Backend wallet listesi alınamadı: $e');
       return null;
     }
   }

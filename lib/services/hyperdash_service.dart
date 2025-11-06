@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/position.dart';
-import '../models/trader_data.dart';
 
 class HyperDashService {
   static const String baseUrl = 'https://api.hyperliquid.xyz';

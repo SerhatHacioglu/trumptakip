@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/position.dart';
 import '../services/hyperdash_service.dart';
-import '../services/coingecko_service.dart';
+import '../services/binance_service.dart';
 import 'portfolio_screen.dart';
 import 'multi_portfolio_screen.dart';
 
@@ -16,7 +16,7 @@ class PositionsScreen extends StatefulWidget {
 
 class _PositionsScreenState extends State<PositionsScreen> {
   final HyperDashService _service = HyperDashService();
-  final CoinGeckoService _coinGeckoService = CoinGeckoService();
+  final BinanceService _binanceService = BinanceService();
   
   // Cüzdan 1
   final String wallet1Address = '0xc2a30212a8ddac9e123944d6e29faddce994e5f2';
@@ -38,7 +38,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
   
   Map<String, CryptoPrice> _cryptoPrices = {};
   bool _isPricesLoading = false;
-  String? _error;
   Timer? _autoRefreshTimer;
 
   @override
@@ -67,7 +66,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
   Future<void> _loadWallet1Positions() async {
     setState(() {
       _isWallet1Loading = true;
-      _error = null;
     });
 
     try {
@@ -78,7 +76,6 @@ class _PositionsScreenState extends State<PositionsScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
         _isWallet1Loading = false;
       });
     }
@@ -126,7 +123,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
     });
 
     try {
-      final prices = await _coinGeckoService.getCryptoPrices();
+      final prices = await _binanceService.getCryptoPrices();
       setState(() {
         _cryptoPrices = prices;
         _isPricesLoading = false;
@@ -366,6 +363,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: displayPrices.entries.map((entry) {
+          final symbol = entry.key;
           final crypto = entry.value;
           final isPositive = crypto.change24h >= 0;
           final changeColor = isPositive ? Colors.green.shade400 : Colors.red.shade400;
@@ -375,7 +373,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  crypto.symbol,
+                  symbol,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -384,7 +382,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '\$${crypto.symbol == 'BTC' || crypto.symbol == 'ETH' ? crypto.price.toStringAsFixed(0) : crypto.price.toStringAsFixed(2)}',
+                  '\$${symbol == 'ETH' ? crypto.price.toStringAsFixed(0) : symbol == 'XRP' ? crypto.price.toStringAsFixed(4) : crypto.price.toStringAsFixed(2)}',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
