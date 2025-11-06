@@ -113,38 +113,43 @@ app.get('/api/wallets', (req, res) => {
 
 // WALLETS referansını dinamik olarak kullan
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
-const BINANCE_API = 'https://api.binance.com/api/v3';
+const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 
-// Binance'den kripto fiyatlarını al (BTC, ETH, SOL)
-async function fetchCryptoPricesFromBinance() {
+// CoinGecko'dan kripto fiyatlarını al (BTC, ETH, SOL)
+async function fetchCryptoPricesFromCoinGecko() {
   try {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-    const prices = {};
+    const coinIds = {
+      'bitcoin': 'BTC',
+      'ethereum': 'ETH',
+      'solana': 'SOL'
+    };
     
-    for (const symbol of symbols) {
-      try {
-        const response = await axios.get(`${BINANCE_API}/ticker/24hr`, {
-          params: { symbol }
-        });
-        
-        const coin = symbol.replace('USDT', '');
-        prices[coin] = parseFloat(response.data.lastPrice);
-      } catch (error) {
-        console.error(`${symbol} fiyatı alınamadı:`, error.message);
+    const ids = Object.keys(coinIds).join(',');
+    const response = await axios.get(`${COINGECKO_API}/simple/price`, {
+      params: {
+        ids: ids,
+        vs_currencies: 'usd'
+      }
+    });
+    
+    const prices = {};
+    for (const [coinId, symbol] of Object.entries(coinIds)) {
+      if (response.data[coinId] && response.data[coinId].usd) {
+        prices[symbol] = response.data[coinId].usd;
       }
     }
     
     return prices;
   } catch (error) {
-    console.error('Binance fiyat alma hatası:', error.message);
+    console.error('CoinGecko fiyat alma hatası:', error.message);
     return {};
   }
 }
 
-// Bot başlatıldığında Binance'den başlangıç fiyatlarını al
+// Bot başlatıldığında CoinGecko'dan başlangıç fiyatlarını al
 async function initializeCryptoPrices() {
-  console.log('🔄 Kripto fiyatları başlatılıyor (Binance)...');
-  const prices = await fetchCryptoPricesFromBinance();
+  console.log('🔄 Kripto fiyatları başlatılıyor (CoinGecko)...');
+  const prices = await fetchCryptoPricesFromCoinGecko();
   
   Object.entries(prices).forEach(([coin, price]) => {
     cryptoPrices[coin].currentPrice = price;
@@ -158,7 +163,7 @@ async function checkCryptoPrices() {
   try {
     console.log('🔍 Kripto fiyatları kontrol ediliyor...', new Date().toISOString());
     
-    const prices = await fetchCryptoPricesFromBinance();
+    const prices = await fetchCryptoPricesFromCoinGecko();
     
     for (const [coin, currentPrice] of Object.entries(prices)) {
       if (!cryptoPrices[coin]) continue;
