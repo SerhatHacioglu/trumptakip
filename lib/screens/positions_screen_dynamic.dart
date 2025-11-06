@@ -28,7 +28,8 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
   
   Map<String, dynamic> _cryptoPrices = {}; // HyperDash + Binance
   bool _isPricesLoading = false;
-  Timer? _autoRefreshTimer;
+  Timer? _priceRefreshTimer; // Binance fiyatları için 20 saniye
+  Timer? _walletRefreshTimer; // Cüzdan pozisyonları için 1 dakika
 
   @override
   void initState() {
@@ -36,16 +37,21 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
     _loadWallets();
     _loadCryptoPrices();
     
-    // Her 1 dakikada otomatik yenile
-    _autoRefreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      _refreshAllWallets();
+    // Binance fiyatlarını her 20 saniyede güncelle
+    _priceRefreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
       _loadCryptoPrices();
+    });
+    
+    // Cüzdan pozisyonlarını her 1 dakikada güncelle
+    _walletRefreshTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _refreshAllWallets();
     });
   }
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
+    _priceRefreshTimer?.cancel();
+    _walletRefreshTimer?.cancel();
     super.dispose();
   }
 
