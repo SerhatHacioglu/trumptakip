@@ -2,10 +2,17 @@ const express = require('express');
 const cron = require('node-cron');
 const TelegramBot = require('node-telegram-bot-api');
 const axios = require('axios');
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+
+// PostgreSQL bağlantısı (Render'dan gelecek)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
 
 // Telegram Bot başlat (polling kapalı - sadece mesaj göndermek için)
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
@@ -49,15 +56,90 @@ const DEFAULT_WALLETS = {
   }
 };
 
-// Initialize with default wallets
-Object.entries(DEFAULT_WALLETS).forEach(([key, wallet]) => {
-  trackedWallets[key] = wallet;
-  lastPositions[key] = [];
-  lastNotifiedSize[key] = {};
-});
+// Veritabanı tablosunu oluştur
+async function initializeDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS wallets (
+        key VARCHAR(255) PRIMARY KEY,
+        address VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        color VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Veritabanı tablosu hazır');
+    
+    // Eğer tablo boşsa, default wallets'i ekle
+    const result = await pool.query('SELECT COUNT(*) FROM wallets');
+    if (parseInt(result.rows[0].count) === 0) {
+      console.log('� Default cüzdanlar ekleniyor...');
+      for (const [key, wallet] of Object.entries(DEFAULT_WALLETS)) {
+        await pool.query(
+          'INSERT INTO wallets (key, address, name) VALUES ($1, $2, $3)',
+          [key, wallet.address, wallet.name]
+        );
+      }
+      console.log('✅ Default cüzdanlar eklendi');
+    }
+  } catch (error) {
+    console.error('Veritabanı başlatma hatası:', error.message);
+  }
+}
+
+// Veritabanından wallets'i yükle
+async function loadWalletsFromDatabase() {
+  try {
+    const result = await pool.query('SELECT * FROM wallets ORDER BY key');
+    const wallets = {};
+    result.rows.forEach(row => {
+      wallets[row.key] = {
+        address: row.address,
+        name: row.name,
+        color: row.color
+      };
+    });
+    console.log(`📂 ${Object.keys(wallets).length} cüzdan veritabanından yüklendi`);
+    return wallets;
+  } catch (error) {
+    console.error('Wallets yükleme hatası:', error.message);
+    return DEFAULT_WALLETS;
+  }
+}
+
+// Wallets'i veritabanına kaydet
+async function saveWalletsToDatabase(wallets) {
+  try {
+    // Önce tüm kayıtları sil
+    await pool.query('DELETE FROM wallets');
+    
+    // Yeni kayıtları ekle
+    for (const [key, wallet] of Object.entries(wallets)) {
+      await pool.query(
+        'INSERT INTO wallets (key, address, name, color) VALUES ($1, $2, $3, $4)',
+        [key, wallet.address, wallet.name, wallet.color || null]
+      );
+    }
+    console.log(`💾 ${Object.keys(wallets).length} cüzdan veritabanına kaydedildi`);
+  } catch (error) {
+    console.error('Wallets kaydetme hatası:', error.message);
+  }
+}
+
+// Initialize with saved or default wallets
+async function initializeWallets() {
+  await initializeDatabase();
+  const savedWallets = await loadWalletsFromDatabase();
+  Object.entries(savedWallets).forEach(([key, wallet]) => {
+    trackedWallets[key] = wallet;
+    lastPositions[key] = [];
+    lastNotifiedSize[key] = {};
+  });
+}
 
 // API endpoint: Wallet listesini güncelle
-app.post('/api/wallets/sync', (req, res) => {
+app.post('/api/wallets/sync', async (req, res) => {
   try {
     const { wallets } = req.body;
     
@@ -87,6 +169,9 @@ app.post('/api/wallets/sync', (req, res) => {
     trackedWallets = newTrackedWallets;
     lastPositions = newLastPositions;
     lastNotifiedSize = newLastNotifiedSize;
+
+    // Veritabanına kaydet (kalıcı hale getir)
+    await saveWalletsToDatabase(newTrackedWallets);
 
     console.log(`✅ ${wallets.length} cüzdan senkronize edildi`);
     
@@ -457,6 +542,7 @@ cron.schedule('*/1 * * * *', () => {
 
 // Sunucu başladığında başlangıç işlemleri
 setTimeout(async () => {
+  await initializeWallets();
   await initializeCryptoPrices();
   await checkPositions();
 }, 5000);
