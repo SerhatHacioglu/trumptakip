@@ -772,41 +772,67 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           ],
                         ),
                       ),
-                      // Sağda butonlar grubu
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.info_outline, size: 20, color: wallet.color.withOpacity(0.7)),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => WalletDetailScreen(wallet: wallet),
+                      // Sağda kompakt buton grubu
+                      Container(
+                        decoration: BoxDecoration(
+                          color: wallet.color.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => WalletDetailScreen(wallet: wallet),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(6),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(Icons.info_outline, size: 18, color: wallet.color),
                                 ),
-                              );
-                            },
-                            tooltip: 'Detaylar',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: Icon(Icons.edit, size: 20, color: wallet.color.withOpacity(0.7)),
-                            onPressed: () => _showAddWalletDialog(wallet: wallet),
-                            tooltip: 'Düzenle',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: Icon(Icons.delete, size: 20, color: Colors.red.shade400.withOpacity(0.7)),
-                            onPressed: () => _deleteWallet(wallet),
-                            tooltip: 'Sil',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ],
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 20,
+                              color: wallet.color.withOpacity(0.2),
+                            ),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _showAddWalletDialog(wallet: wallet),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(Icons.edit, size: 18, color: wallet.color),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 20,
+                              color: wallet.color.withOpacity(0.2),
+                            ),
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _deleteWallet(wallet),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(Icons.delete, size: 18, color: Colors.red.shade400),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Container(
