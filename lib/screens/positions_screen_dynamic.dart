@@ -711,20 +711,14 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    wallet.name,
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      color: wallet.color,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              wallet.name,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: wallet.color,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 3),
                             GestureDetector(
@@ -778,36 +772,41 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           ],
                         ),
                       ),
-                      // Detail, Edit ve Delete butonları
-                      IconButton(
-                        icon: Icon(Icons.info_outline, size: 20, color: wallet.color.withOpacity(0.7)),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => WalletDetailScreen(wallet: wallet),
-                            ),
-                          );
-                        },
-                        tooltip: 'Detaylar',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: Icon(Icons.edit, size: 20, color: wallet.color.withOpacity(0.7)),
-                        onPressed: () => _showAddWalletDialog(wallet: wallet),
-                        tooltip: 'Düzenle',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: Icon(Icons.delete, size: 20, color: Colors.red.shade400.withOpacity(0.7)),
-                        onPressed: () => _deleteWallet(wallet),
-                        tooltip: 'Sil',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                      // Sağda butonlar grubu
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.info_outline, size: 20, color: wallet.color.withOpacity(0.7)),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WalletDetailScreen(wallet: wallet),
+                                ),
+                              );
+                            },
+                            tooltip: 'Detaylar',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: Icon(Icons.edit, size: 20, color: wallet.color.withOpacity(0.7)),
+                            onPressed: () => _showAddWalletDialog(wallet: wallet),
+                            tooltip: 'Düzenle',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: Icon(Icons.delete, size: 20, color: Colors.red.shade400.withOpacity(0.7)),
+                            onPressed: () => _deleteWallet(wallet),
+                            tooltip: 'Sil',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
                       ),
                       const SizedBox(width: 8),
                       Container(
