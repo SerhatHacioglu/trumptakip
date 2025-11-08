@@ -44,7 +44,7 @@ let cryptoPrices = {
 const DEFAULT_WALLETS = {
   wallet1: {
     address: process.env.WALLET_ADDRESS || '0xc2a30212a8ddac9e123944d6e29faddce994e5f2',
-    name: 'Cüzdan 1'
+    name: 'Barron'
   },
   wallet2: {
     address: process.env.WALLET_ADDRESS_2 || '0xb317d2bc2d3d2df5fa441b5bae0ab9d8b07283ae',
@@ -53,6 +53,10 @@ const DEFAULT_WALLETS = {
   wallet3: {
     address: process.env.WALLET_ADDRESS_3 || '0x9263c1bd29aa87a118242f3fbba4517037f8cc7a',
     name: 'Cüzdan 3'
+  },
+  wallet4: {
+    address: process.env.WALLET_ADDRESS_4 || '0x7b7b908c076b9784487180de92e7161c2982734e',
+    name: 'Shortcu'
   }
 };
 

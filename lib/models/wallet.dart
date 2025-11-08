@@ -86,7 +86,7 @@ class Wallet {
     return [
       Wallet(
         id: 'wallet_1',
-        name: 'Cüzdan 1',
+        name: 'Barron',
         address: '0xc2a30212a8ddac9e123944d6e29faddce994e5f2',
         color: Colors.red,
         order: 0,
@@ -104,6 +104,13 @@ class Wallet {
         address: '0x9263c1bd29aa87a118242f3fbba4517037f8cc7a',
         color: Colors.teal,
         order: 2,
+      ),
+      Wallet(
+        id: 'wallet_4',
+        name: 'Shortcu',
+        address: '0x7b7b908c076b9784487180de92e7161c2982734e',
+        color: Colors.orange,
+        order: 3,
       ),
     ];
   }

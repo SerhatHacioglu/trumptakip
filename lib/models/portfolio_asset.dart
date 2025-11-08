@@ -57,10 +57,10 @@ class PortfolioAsset {
     return [
       PortfolioAsset(
         symbol: 'AVAX',
-        amount: 141.93,
+        amount: 125,
         name: 'Avalanche',
         emoji: '🔺',
-        investedTRY: 162000,
+        investedTRY: 142000,
         coingeckoId: 'avalanche-2',
       ),
       PortfolioAsset(
@@ -73,7 +73,7 @@ class PortfolioAsset {
       ),
       PortfolioAsset(
         symbol: 'ETH',
-        amount: 0.850274,
+        amount: 0.6,
         name: 'Ethereum',
         emoji: '💎',
         investedTRY: 162000,
@@ -81,10 +81,10 @@ class PortfolioAsset {
       ),
       PortfolioAsset(
         symbol: 'HYPE',
-        amount: 23.0152,
+        amount: 29.7852,
         name: 'Hype',
         emoji: '🌊',
-        investedTRY: 47000,
+        investedTRY: 67000,
         coingeckoId: 'hyperliquid',
       ),
     ];

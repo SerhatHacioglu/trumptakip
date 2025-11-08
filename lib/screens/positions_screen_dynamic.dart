@@ -9,6 +9,7 @@ import '../services/wallet_sync_service.dart';
 import '../widgets/add_wallet_dialog.dart';
 import 'portfolio_screen.dart';
 import 'multi_portfolio_screen.dart';
+import 'wallet_detail_screen.dart';
 
 class PositionsScreenDynamic extends StatefulWidget {
   const PositionsScreenDynamic({super.key});
@@ -777,7 +778,22 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           ],
                         ),
                       ),
-                      // Edit ve Delete butonları
+                      // Detail, Edit ve Delete butonları
+                      IconButton(
+                        icon: Icon(Icons.info_outline, size: 20, color: wallet.color.withOpacity(0.7)),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => WalletDetailScreen(wallet: wallet),
+                            ),
+                          );
+                        },
+                        tooltip: 'Detaylar',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                      const SizedBox(width: 4),
                       IconButton(
                         icon: Icon(Icons.edit, size: 20, color: wallet.color.withOpacity(0.7)),
                         onPressed: () => _showAddWalletDialog(wallet: wallet),

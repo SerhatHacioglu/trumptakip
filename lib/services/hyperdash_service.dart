@@ -119,4 +119,132 @@ class HyperDashService {
       return 0.0;
     }
   }
+
+  // Get detailed wallet info with all available data
+  Future<Map<String, dynamic>> getWalletDetails(String walletAddress) async {
+    try {
+      final Map<String, dynamic> details = {};
+      
+      // 1. Clearinghouse State (positions, margin, account value)
+      final stateResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'clearinghouseState',
+          'user': walletAddress,
+        }),
+      );
+      if (stateResponse.statusCode == 200) {
+        details['clearinghouseState'] = jsonDecode(stateResponse.body);
+      }
+      
+      // 2. User Funding (funding payments history)
+      final fundingResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'userFunding',
+          'user': walletAddress,
+          'startTime': DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch,
+        }),
+      );
+      if (fundingResponse.statusCode == 200) {
+        details['userFunding'] = jsonDecode(fundingResponse.body);
+      }
+      
+      // 3. User Fills (trade history - last 100 trades)
+      final fillsResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'userFills',
+          'user': walletAddress,
+        }),
+      );
+      if (fillsResponse.statusCode == 200) {
+        details['userFills'] = jsonDecode(fillsResponse.body);
+      }
+      
+      // 4. Ledger Updates (deposits, withdrawals, transfers)
+      final ledgerResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'userNonFundingLedgerUpdates',
+          'user': walletAddress,
+          'startTime': DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch,
+        }),
+      );
+      if (ledgerResponse.statusCode == 200) {
+        details['ledgerUpdates'] = jsonDecode(ledgerResponse.body);
+      }
+      
+      // 5. User Rates (cumulative trading volume and fees)
+      final ratesResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'userRateLimit',
+          'user': walletAddress,
+        }),
+      );
+      if (ratesResponse.statusCode == 200) {
+        details['userRates'] = jsonDecode(ratesResponse.body);
+      }
+      
+      // 6. Referral State
+      final referralResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'referral',
+          'user': walletAddress,
+        }),
+      );
+      if (referralResponse.statusCode == 200) {
+        details['referral'] = jsonDecode(referralResponse.body);
+      }
+      
+      // 7. Historical PnL
+      final pnlResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'accountPnlHistory',
+          'user': walletAddress,
+        }),
+      );
+      if (pnlResponse.statusCode == 200) {
+        details['pnlHistory'] = jsonDecode(pnlResponse.body);
+      }
+      
+      // 8. Current prices
+      final pricesResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'allMids',
+        }),
+      );
+      if (pricesResponse.statusCode == 200) {
+        details['allMids'] = jsonDecode(pricesResponse.body);
+      }
+      
+      // 9. Meta info
+      final metaResponse = await http.post(
+        Uri.parse('$baseUrl/info'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'meta',
+        }),
+      );
+      if (metaResponse.statusCode == 200) {
+        details['meta'] = jsonDecode(metaResponse.body);
+      }
+      
+      return details;
+    } catch (e) {
+      return {};
+    }
+  }
 }
