@@ -19,6 +19,7 @@ class AssetSuggestions {
     AssetSuggestion(symbol: 'ETH', name: 'Ethereum', coingeckoId: 'ethereum', emoji: '💎'),
     AssetSuggestion(symbol: 'SOL', name: 'Solana', coingeckoId: 'solana', emoji: '☀️'),
     AssetSuggestion(symbol: 'AVAX', name: 'Avalanche', coingeckoId: 'avalanche-2', emoji: '🔺'),
+    AssetSuggestion(symbol: 'ASTER', name: 'Aster', coingeckoId: 'aster-2', emoji: '⭐'),
     AssetSuggestion(symbol: 'XRP', name: 'Ripple', coingeckoId: 'ripple', emoji: '💧'),
     AssetSuggestion(symbol: 'ADA', name: 'Cardano', coingeckoId: 'cardano', emoji: '🔷'),
     AssetSuggestion(symbol: 'DOGE', name: 'Dogecoin', coingeckoId: 'dogecoin', emoji: '🐕'),

@@ -112,6 +112,13 @@ class Wallet {
         color: Colors.orange,
         order: 3,
       ),
+      Wallet(
+        id: 'wallet_5',
+        name: 'Cüzdan 5',
+        address: '0x089fe537f4b2af55fa990bc64ff4125800bba4f8',
+        color: Colors.deepOrange,
+        order: 4,
+      ),
     ];
   }
 

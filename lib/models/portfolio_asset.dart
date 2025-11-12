@@ -65,10 +65,10 @@ class PortfolioAsset {
       ),
       PortfolioAsset(
         symbol: 'SOL',
-        amount: 17.2576,
+        amount: 13,
         name: 'Solana',
         emoji: '☀️',
-        investedTRY: 159000,
+        investedTRY: 119000,
         coingeckoId: 'solana',
       ),
       PortfolioAsset(
@@ -80,12 +80,20 @@ class PortfolioAsset {
         coingeckoId: 'ethereum',
       ),
       PortfolioAsset(
-        symbol: 'HYPE',
-        amount: 29.7852,
-        name: 'Hype',
-        emoji: '🌊',
+        symbol: 'UNI',
+        amount: 168.32,
+        name: 'Uniswap',
+        emoji: '🦄',
         investedTRY: 67000,
-        coingeckoId: 'hyperliquid',
+        coingeckoId: 'uniswap',
+      ),
+      PortfolioAsset(
+        symbol: 'ASTER',
+        amount: 580.55,
+        name: 'Aster',
+        emoji: '⭐',
+        investedTRY: 40000,
+        coingeckoId: 'aster-2',
       ),
     ];
   }

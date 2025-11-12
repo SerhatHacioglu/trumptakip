@@ -37,6 +37,7 @@ class CoinGeckoService {
           'chainlink': 'LINK',
           'uniswap': 'UNI',
           'avalanche-2': 'AVAX',
+          'aster-2': 'ASTER',
           'cosmos': 'ATOM',
           'stellar': 'XLM',
           'polygon': 'MATIC',

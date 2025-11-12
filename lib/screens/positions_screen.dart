@@ -36,6 +36,12 @@ class _PositionsScreenState extends State<PositionsScreen> {
   bool _isWallet3Expanded = false;
   bool _isWallet3Loading = false;
   
+  // Cüzdan 5
+  final String wallet5Address = '0x089fe537f4b2af55fa990bc64ff4125800bba4f8';
+  List<Position> _wallet5Positions = [];
+  bool _isWallet5Expanded = false;
+  bool _isWallet5Loading = false;
+  
   Map<String, CryptoPrice> _cryptoPrices = {};
   bool _isPricesLoading = false;
   Timer? _autoRefreshTimer;
@@ -46,6 +52,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
     _loadWallet1Positions();
     _loadWallet2Positions();
     _loadWallet3Positions();
+    _loadWallet5Positions();
     _loadCryptoPrices();
     
     // Her 1 dakikada otomatik yenile
@@ -53,6 +60,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
       _loadWallet1Positions();
       _loadWallet2Positions();
       _loadWallet3Positions();
+      _loadWallet5Positions();
       _loadCryptoPrices();
     });
   }
@@ -113,6 +121,24 @@ class _PositionsScreenState extends State<PositionsScreen> {
     } catch (e) {
       setState(() {
         _isWallet3Loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadWallet5Positions() async {
+    setState(() {
+      _isWallet5Loading = true;
+    });
+
+    try {
+      final positions = await _service.getOpenPositions(wallet5Address);
+      setState(() {
+        _wallet5Positions = positions;
+        _isWallet5Loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isWallet5Loading = false;
       });
     }
   }
@@ -224,6 +250,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
               await _loadWallet1Positions();
               await _loadWallet2Positions();
               await _loadWallet3Positions();
+              await _loadWallet5Positions();
             },
             tooltip: 'Yenile',
           ),
@@ -239,6 +266,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
         await _loadWallet1Positions();
         await _loadWallet2Positions();
         await _loadWallet3Positions();
+        await _loadWallet5Positions();
         await _loadCryptoPrices();
       },
       child: ListView(
@@ -296,6 +324,23 @@ class _PositionsScreenState extends State<PositionsScreen> {
               });
             },
             color: Colors.teal,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Cüzdan 5
+          _buildWalletCard(
+            walletName: 'Cüzdan 5',
+            walletAddress: wallet5Address,
+            positions: _wallet5Positions,
+            isExpanded: _isWallet5Expanded,
+            isLoading: _isWallet5Loading,
+            onExpandToggle: () {
+              setState(() {
+                _isWallet5Expanded = !_isWallet5Expanded;
+              });
+            },
+            color: Colors.deepOrange,
           ),
         ],
       ),
@@ -422,6 +467,7 @@ class _PositionsScreenState extends State<PositionsScreen> {
       ..._wallet1Positions,
       ..._wallet2Positions,
       ..._wallet3Positions,
+      ..._wallet5Positions,
     ];
 
     if (allPositions.isEmpty) {
