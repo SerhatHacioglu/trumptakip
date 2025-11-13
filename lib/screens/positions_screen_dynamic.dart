@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/position.dart';
 import '../models/wallet.dart';
 import '../services/hyperdash_service.dart';
@@ -35,6 +36,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable(); // Ekran kapanmasını engelle
     _loadWallets();
     _loadCryptoPrices();
     
@@ -51,6 +53,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
 
   @override
   void dispose() {
+    WakelockPlus.disable(); // Ekran kapanmasını tekrar etkinleştir
     _priceRefreshTimer?.cancel();
     _walletRefreshTimer?.cancel();
     super.dispose();
