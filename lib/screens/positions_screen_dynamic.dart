@@ -38,8 +38,8 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
     _loadWallets();
     _loadCryptoPrices();
     
-    // Binance fiyatlarını her 20 saniyede güncelle
-    _priceRefreshTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+    // Binance fiyatlarını her 10 saniyede güncelle
+    _priceRefreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       _loadCryptoPrices();
     });
     
@@ -500,7 +500,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
     return Container(
       key: const ValueKey('position_prices'),
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -515,67 +515,43 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
           color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.trending_up,
-                size: 20,
-                color: Theme.of(context).colorScheme.primary,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: sortedCoins.map((entry) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
               ),
-              const SizedBox(width: 6),
-              Text(
-                'Açık Pozisyon Fiyatları',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: sortedCoins.map((entry) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  entry.key,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      entry.key,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '\$${entry.value.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 3),
+                Text(
+                  '\$${entry.value.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
-              );
-            }).toList(),
-          ),
-        ],
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -631,16 +607,16 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
 
     return Card(
       key: key,
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 4,
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 3,
       shadowColor: wallet.color.withOpacity(0.3),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: wallet.color.withOpacity(0.5), width: 2),
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: wallet.color.withOpacity(0.5), width: 1.5),
       ),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -656,15 +632,15 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
               _walletExpandedStates[wallet.id] = !isExpanded;
             });
           },
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Header with gradient
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -672,7 +648,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                         wallet.color.withOpacity(0.1),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
                     children: [
@@ -682,11 +658,11 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                           Icon(
                             Icons.drag_indicator,
                             color: wallet.color.withOpacity(0.5),
-                            size: 20,
+                            size: 18,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               color: wallet.color.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(10),
@@ -701,12 +677,12 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                             child: Icon(
                               Icons.account_balance_wallet,
                               color: wallet.color,
-                              size: 20,
+                              size: 18,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -714,7 +690,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                             Text(
                               wallet.name,
                               style: TextStyle(
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: wallet.color,
                               ),
@@ -854,34 +830,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
               const SizedBox(height: 12),
               
               // Özet Bilgiler
-              if (isLoading)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(wallet.color),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Yükleniyor...',
-                          style: TextStyle(
-                            color: wallet.color,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else if (positions.isEmpty)
+              if (positions.isEmpty && !isLoading)
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -951,7 +900,7 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                 
                 // Statistics Cards
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(10),
@@ -960,70 +909,94 @@ class _PositionsScreenDynamicState extends State<PositionsScreenDynamic> {
                       width: 1,
                     ),
                   ),
-                  child: Column(
+                  child: Stack(
                     children: [
-                      Row(
+                      Column(
                         children: [
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: Icons.assessment_outlined,
-                              label: 'Pozisyon',
-                              value: '${positions.length}',
-                              color: wallet.color,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: Icons.assessment_outlined,
+                                  label: 'Pozisyon',
+                                  value: '${positions.length}',
+                                  color: wallet.color,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: Icons.account_balance_wallet_outlined,
+                                  label: 'Toplam Değer',
+                                  value: '\$${_formatPrice(totalValue)}',
+                                  color: wallet.color,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: isPnlPositive ? Icons.trending_up : Icons.trending_down,
+                                  label: 'PnL',
+                                  value: '${isPnlPositive ? '+' : ''}\$${_formatPrice(totalPnl)}',
+                                  color: pnlColor,
+                                ),
+                              ),
+                            ],
                           ),
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: Icons.account_balance_wallet_outlined,
-                              label: 'Toplam Değer',
-                              value: '\$${_formatPrice(totalValue)}',
-                              color: wallet.color,
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: isPnlPositive ? Icons.trending_up : Icons.trending_down,
-                              label: 'PnL',
-                              value: '${isPnlPositive ? '+' : ''}\$${_formatPrice(totalPnl)}',
-                              color: pnlColor,
-                            ),
+                          const SizedBox(height: 10),
+                          Divider(color: wallet.color.withOpacity(0.2), height: 1),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: Icons.swap_vert,
+                                  label: 'Long/Short',
+                                  value: '$longCount / $shortCount',
+                                  color: wallet.color,
+                                  subtitle: longCount > shortCount ? '🟢 Bull' : shortCount > longCount ? '🔴 Bear' : '⚪',
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: Icons.security,
+                                  label: 'Marj',
+                                  value: '\$${_formatPrice(totalMargin)}',
+                                  color: wallet.color,
+                                  subtitle: '${marginUsagePercent.toStringAsFixed(1)}%',
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildEnhancedSummaryItem(
+                                  icon: Icons.speed,
+                                  label: 'Kaldıraç',
+                                  value: '${avgLeverage.toStringAsFixed(1)}x',
+                                  color: avgLeverage > 15 ? Colors.orange : wallet.color,
+                                  subtitle: avgLeverage > 15 ? '⚠️' : avgLeverage > 10 ? '⚡' : '✓',
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      Divider(color: wallet.color.withOpacity(0.2), height: 1),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: Icons.swap_vert,
-                              label: 'Long/Short',
-                              value: '$longCount / $shortCount',
-                              color: wallet.color,
-                              subtitle: longCount > shortCount ? '🟢 Bull' : shortCount > longCount ? '🔴 Bear' : '⚪',
+                      // Loading overlay
+                      if (isLoading)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surface.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(wallet.color),
+                                ),
+                              ),
                             ),
                           ),
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: Icons.security,
-                              label: 'Marj',
-                              value: '\$${_formatPrice(totalMargin)}',
-                              color: wallet.color,
-                              subtitle: '${marginUsagePercent.toStringAsFixed(1)}%',
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildEnhancedSummaryItem(
-                              icon: Icons.speed,
-                              label: 'Kaldıraç',
-                              value: '${avgLeverage.toStringAsFixed(1)}x',
-                              color: avgLeverage > 15 ? Colors.orange : wallet.color,
-                              subtitle: avgLeverage > 15 ? '⚠️' : avgLeverage > 10 ? '⚡' : '✓',
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
